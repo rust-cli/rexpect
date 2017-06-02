@@ -1,9 +1,13 @@
 language: rust
+sudo: false
 
 rust:
   - nightly
   - stable
   - beta
+
+before_script:
+  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 
 os:
   - linux
@@ -12,3 +16,15 @@ os:
 script:
   - cargo build --verbose
   - cargo test --verbose
+  - |
+      travis-cargo build &&
+      travis-cargo test &&
+      travis-cargo --only stable doc
+
+after_success:
+  - travis-cargo --only stable doc-upload
+
+# needed to forbid travis-cargo to pass `--feature nightly` when building with nightly compiler
+env:
+  global:
+    - TRAVIS_CARGO_NIGHTLY_FEATURE=""
