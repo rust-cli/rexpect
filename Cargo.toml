@@ -1,0 +1,7 @@
+[package]
+name = "rexpect"
+version = "0.1.0"
+authors = ["Philipp Keller <philipp.keller@gmail.com>"]
+
+[dependencies]
+nix = {git = "https://github.com/nix-rust/nix.git"}
