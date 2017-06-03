@@ -17,12 +17,14 @@ script:
   - cargo build --verbose
   - cargo test --verbose
   - |
-      travis-cargo build &&
-      travis-cargo test &&
-      travis-cargo --only stable doc
+      if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+        travis-cargo build &&
+        travis-cargo test &&
+        travis-cargo --only stable doc;
+      fi
 
 after_success:
-  - travis-cargo --only stable doc-upload
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then travis-cargo --only stable doc-upload; fi
 
 # needed to forbid travis-cargo to pass `--feature nightly` when building with nightly compiler
 env:

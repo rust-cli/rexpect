@@ -1,3 +1,5 @@
+//! Start a process via pty
+
 use std::path::Path;
 use nix::pty::{posix_openpt, grantpt, unlockpt, ptsname, PtyMaster};
 use nix::fcntl::{O_RDWR, open};
@@ -11,7 +13,8 @@ use std::process::Command;
 ///
 /// # Example
 ///
-/// Typically you want to do something like this:
+/// Typically you want to do something like this (for a more complete example see
+/// unit test `test_cat` within this module):
 ///
 /// ```
 /// # #![allow(unused_mut)]
