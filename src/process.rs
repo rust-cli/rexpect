@@ -107,7 +107,7 @@ mod tests {
         hello cat\r\n\
         ^C");
             let should = wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
-            assert_eq!(should, wait::wait()?);
+            assert_eq!(should, wait::waitpid(process.child_pid, None)?);
             Ok(())
         }().expect("could not execute cat");
     }
