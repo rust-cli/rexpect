@@ -1,20 +1,28 @@
-use ::process::PtyProcess;
+use process::PtyProcess;
 use std::io::{BufReader, LineWriter, Result};
 use std::ffi::OsStr;
 use std::fs::File;
 use std::process::Command;
 use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::io::prelude::*;
+use nix::sys::wait;
+use nix::unistd;
 
 pub struct PtySession {
-    process:PtyProcess,
-    writer:LineWriter<File>,
-    reader: BufReader<File>
+    process: PtyProcess,
+    writer: LineWriter<File>,
+    reader: BufReader<File>,
 }
 
 impl PtySession {
     pub fn send_line(&mut self, line: &str) -> Result<()> {
         self.writer.write_all(line.as_bytes())
+    }
+    pub fn status_poll(&self) {
+        wait::waitpid(self.process.child_pid, Some(wait::WNOWAIT));
+    }
+    pub fn close(&self) {
+        unistd::close(self.process.pty.as_raw_fd());
     }
 }
 
@@ -25,10 +33,10 @@ pub fn spawn<S: AsRef<OsStr>>(program: S) -> Result<PtySession> {
     let writer = LineWriter::new(f.try_clone()?);
     let reader = BufReader::new(f);
     Ok(PtySession {
-        process: process,
-        writer: writer,
-        reader: reader
-    })
+           process: process,
+           writer: writer,
+           reader: reader,
+       })
 }
 
 #[cfg(test)]
@@ -39,8 +47,10 @@ mod tests {
         || -> Result<()> {
             let mut s = spawn("cat")?;
             s.send_line("hans")?;
+            s.close();
             Ok(())
-        }().expect("could not execute");
+        }()
+                .expect("could not execute");
     }
 
 }
