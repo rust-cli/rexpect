@@ -1,3 +1,5 @@
+//! Main module of rexpect: start new process and interact with it
+
 use process::PtyProcess;
 use std::io::{BufReader, LineWriter, Result};
 use std::ffi::OsStr;
@@ -5,9 +7,11 @@ use std::fs::File;
 use std::process::Command;
 use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::io::prelude::*;
-use nix::sys::wait;
+use nix::sys::{wait, signal};
 use nix::unistd;
+use nix;
 
+/// Interact with a process with read/write/signals, etc.
 pub struct PtySession {
     process: PtyProcess,
     writer: LineWriter<File>,
@@ -18,11 +22,35 @@ impl PtySession {
     pub fn send_line(&mut self, line: &str) -> Result<()> {
         self.writer.write_all(line.as_bytes())
     }
-    pub fn status_poll(&self) {
-        wait::waitpid(self.process.child_pid, Some(wait::WNOWAIT));
+
+    /// get status of child process, nonblocking
+    ///
+    /// # Example
+    /// ```rust,no_run
+    ///
+    /// # extern crate nix;
+    /// # extern crate rexpect;
+    /// # use nix::sys::wait;
+    ///
+    /// # fn main() {
+    ///     let process = rexpect::spawn("sleep 5").expect("cannot run cat");
+    ///     while process.status() == Ok(wait::WaitStatus::StillAlive) {
+    ///         // do something
+    ///     }
+    /// # }
+    /// ```
+    ///
+    pub fn status(&self) -> nix::Result<(wait::WaitStatus)> {
+        wait::waitpid(self.process.child_pid, Some(wait::WNOHANG))
     }
-    pub fn close(&self) {
-        unistd::close(self.process.pty.as_raw_fd());
+
+    /// regularly exit the process
+    ///
+    /// sends SIGHUP and closes the pty session
+    pub fn exit(&self) -> nix::Result<()> {
+        signal::kill(self.process.child_pid, signal::SIGHUP).and_then(|_|
+            unistd::close(self.process.pty.as_raw_fd())
+        )
     }
 }
 
@@ -42,15 +70,16 @@ pub fn spawn<S: AsRef<OsStr>>(program: S) -> Result<PtySession> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::thread::sleep_ms;
     #[test]
     fn test_cat() {
         || -> Result<()> {
             let mut s = spawn("cat")?;
             s.send_line("hans")?;
-            s.close();
+            s.exit()?;
+            println!("status={:?}", s.status()?);
             Ok(())
-        }()
-                .expect("could not execute");
+        }().expect("could not execute");
     }
 
 }
