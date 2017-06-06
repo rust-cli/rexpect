@@ -44,12 +44,25 @@ impl PtySession {
         wait::waitpid(self.process.child_pid, Some(wait::WNOHANG)).chain_err(|| "cannot read status")
     }
 
+    /// Wait until process has exited. This is a blocking call.
+    /// If the process doesn't terminate this will block forever.
+    pub fn wait(&self) ->Result<(wait::WaitStatus)> {
+        wait::waitpid(self.process.child_pid, None).chain_err(|| "wait: cannot read status")
+    }
+
     /// regularly exit the process
     ///
     /// closes the pty session and sends SIGTERM to the process
     pub fn exit(&self) -> Result<()> {
+        self.kill(signal::SIGTERM)
+    }
+
+    /// kills the process with a specific signal
+    ///
+    /// closes the pty session and sends SIGTERM to the process
+    pub fn kill(&self, sig:signal::Signal) -> Result<()> {
         unistd::close(self.process.pty.as_raw_fd()).and_then(|_|
-            signal::kill(self.process.child_pid, signal::SIGTERM)
+            signal::kill(self.process.child_pid, sig)
         ).chain_err(|| "failed to exit process")
     }
 }
@@ -72,12 +85,11 @@ mod tests {
     use super::*;
     #[test]
     fn test_cat2() {
-        println!("starting cat2");
         || -> Result<()> {
-            let mut s = spawn("sh")?;
+            let mut s = spawn("cat")?;
             s.send_line("hans")?;
             s.exit()?;
-            println!("status={:?}", s.status()?);
+            println!("status={:?}", s.wait()?);
             Ok(())
         }().expect("could not execute");
     }
