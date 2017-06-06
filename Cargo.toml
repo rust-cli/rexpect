@@ -6,3 +6,4 @@ authors = ["Philipp Keller <philipp.keller@gmail.com>"]
 
 [dependencies]
 nix = {git = "https://github.com/nix-rust/nix.git"}
+error-chain = "0.10"
