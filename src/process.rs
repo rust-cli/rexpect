@@ -1,13 +1,15 @@
 //! Start a process via pty
 
+use std::io;
 use std::path::Path;
-use nix::pty::{posix_openpt, grantpt, unlockpt, ptsname, PtyMaster};
+use std::process::Command;
+use std::os::unix::process::CommandExt;
+use nix::pty::{posix_openpt, grantpt, unlockpt, ptsname_r, PtyMaster};
 use nix::fcntl::{O_RDWR, open};
 use nix::sys::{stat};
 use nix::unistd::{fork, ForkResult, setsid, dup2};
 use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
-use std::io::{Result, Error};
-use std::process::Command;
+use errors::*; // load error-chain
 
 /// Starts a process in a forked tty so you can interact with it sams as with in a terminal
 ///
@@ -42,35 +44,37 @@ pub struct PtyProcess {
 
 impl PtyProcess {
     pub fn new(mut command: Command) -> Result<Self> {
-        // Open a new PTY master
-        let master_fd = posix_openpt(O_RDWR)?;
+        || -> io::Result<Self> {
+            // Open a new PTY master
+            let master_fd = posix_openpt(O_RDWR)?;
 
-        // Allow a slave to be generated for it
-        grantpt(&master_fd)?;
-        unlockpt(&master_fd)?;
+            // Allow a slave to be generated for it
+            grantpt(&master_fd)?;
+            unlockpt(&master_fd)?;
 
-        // Get the name of the slave
-        let slave_name = ptsname(&master_fd)?;
+            // Get the name of the slave
+            let slave_name = ptsname_r(&master_fd)?;
 
-        match fork()? {
-            ForkResult::Child => {
-                setsid()?; // create new session with child as session leader
-                let slave_fd = open(Path::new(&slave_name), O_RDWR, stat::Mode::empty())?;
+            match fork()? {
+                ForkResult::Child => {
+                    setsid()?; // create new session with child as session leader
+                    let slave_fd = open(Path::new(&slave_name), O_RDWR, stat::Mode::empty())?;
 
-                // assign stdin, stdout, stderr to the tty, just like a terminal does
-                dup2(slave_fd, STDIN_FILENO)?;
-                dup2(slave_fd, STDOUT_FILENO)?;
-                dup2(slave_fd, STDERR_FILENO)?;
-                command.status()?;
-                Err(Error::last_os_error())
+                    // assign stdin, stdout, stderr to the tty, just like a terminal does
+                    dup2(slave_fd, STDIN_FILENO)?;
+                    dup2(slave_fd, STDOUT_FILENO)?;
+                    dup2(slave_fd, STDERR_FILENO)?;
+                    command.exec();
+                    Err(io::Error::last_os_error())
+                },
+                ForkResult::Parent { child: child_pid } => {
+                    Ok(PtyProcess {
+                        pty: master_fd,
+                        child_pid: child_pid,
+                    })
+                }
             }
-            ForkResult::Parent { child: child_pid } => {
-                Ok(PtyProcess {
-                    pty: master_fd,
-                    child_pid: child_pid,
-                })
-            }
-        }
+        }().chain_err(|| format!("could not execute {:?}", command))
     }
 }
 
@@ -106,6 +110,7 @@ mod tests {
             assert_eq!(output, "hello cat\r\n\
         hello cat\r\n\
         ^C");
+            println!("about to wait for {}", process.child_pid);
             let should = wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
             assert_eq!(should, wait::waitpid(process.child_pid, None)?);
             Ok(())

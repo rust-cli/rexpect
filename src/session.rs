@@ -33,7 +33,7 @@ impl PtySession {
     /// # use nix::sys::wait;
     ///
     /// # fn main() {
-    ///     let process = rexpect::spawn("sleep 5").expect("cannot run cat");
+    ///     let process = rexpect::spawn("/usr/bin/myprog").expect("cannot run cat");
     ///     while process.status().unwrap() == wait::WaitStatus::StillAlive {
     ///         // do something
     ///     }
@@ -46,10 +46,10 @@ impl PtySession {
 
     /// regularly exit the process
     ///
-    /// sends SIGHUP and closes the pty session
+    /// closes the pty session and sends SIGTERM to the process
     pub fn exit(&self) -> Result<()> {
-        signal::kill(self.process.child_pid, signal::SIGHUP).and_then(|_|
-            unistd::close(self.process.pty.as_raw_fd())
+        unistd::close(self.process.pty.as_raw_fd()).and_then(|_|
+            signal::kill(self.process.child_pid, signal::SIGTERM)
         ).chain_err(|| "failed to exit process")
     }
 }
@@ -70,11 +70,11 @@ pub fn spawn<S: AsRef<OsStr>>(program: S) -> Result<PtySession> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::thread::sleep_ms;
     #[test]
-    fn test_cat() {
+    fn test_cat2() {
+        println!("starting cat2");
         || -> Result<()> {
-            let mut s = spawn("cat")?;
+            let mut s = spawn("sh")?;
             s.send_line("hans")?;
             s.exit()?;
             println!("status={:?}", s.status()?);
