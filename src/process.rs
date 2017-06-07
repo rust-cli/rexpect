@@ -70,8 +70,7 @@ impl PtyProcess {
             let slave_name = ptsname_r(&master_fd)?;
             #[cfg(not(target_os = "linux"))]
             let slave_name = {
-                // unwrap_or ignores poison errors
-                PTSNAME_MUTEX.lock().unwrap_or_else(|error| error.into_inner())?;
+                let _ = PTSNAME_MUTEX.lock();
                 ptsname(&master_fd)?
             };
 
