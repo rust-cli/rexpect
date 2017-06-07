@@ -4,12 +4,24 @@ use std::io;
 use std::path::Path;
 use std::process::Command;
 use std::os::unix::process::CommandExt;
-use nix::pty::{posix_openpt, grantpt, unlockpt, ptsname_r, PtyMaster};
+use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
 use nix::fcntl::{O_RDWR, open};
 use nix::sys::{stat};
 use nix::unistd::{fork, ForkResult, setsid, dup2};
 use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 use errors::*; // load error-chain
+
+#[cfg(target_os = "linux")]
+use nix::pty::ptsname_r;
+
+#[cfg(not(target_os = "linux"))]
+use nix::pty::ptsname;
+#[cfg(not(target_os = "linux"))]
+use std::sync::Mutex;
+#[cfg(not(target_os = "linux"))]
+lazy_static! {
+    static ref PTSNAME_MUTEX: Mutex<()> = { println!("singleton.."); Mutex::new(()) };
+}
 
 /// Starts a process in a forked tty so you can interact with it sams as with in a terminal
 ///
@@ -52,8 +64,17 @@ impl PtyProcess {
             grantpt(&master_fd)?;
             unlockpt(&master_fd)?;
 
-            // Get the name of the slave
+            // ptsname is not thread-safe. There is ptsname_r which is only available on Linux
+            // -> use ptsname_r on Linux, for other OS use a mutex
+            #[cfg(target_os = "linux")]
             let slave_name = ptsname_r(&master_fd)?;
+            #[cfg(not(target_os = "linux"))]
+            {
+                // unwrap_or ignores poison errors
+                PTSNAME_MUTEX.lock().unwrap_or_else(|error| error.into_inner())?;
+                ptsname(&master_fd)?
+            };
+            println!("after lock: {}", slave_name);
 
             match fork()? {
                 ForkResult::Child => {
