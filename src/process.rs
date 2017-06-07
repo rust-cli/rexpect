@@ -69,12 +69,11 @@ impl PtyProcess {
             #[cfg(target_os = "linux")]
             let slave_name = ptsname_r(&master_fd)?;
             #[cfg(not(target_os = "linux"))]
-            {
+            let slave_name = {
                 // unwrap_or ignores poison errors
                 PTSNAME_MUTEX.lock().unwrap_or_else(|error| error.into_inner())?;
                 ptsname(&master_fd)?
             };
-            println!("after lock: {}", slave_name);
 
             match fork()? {
                 ForkResult::Child => {
@@ -131,7 +130,6 @@ mod tests {
             assert_eq!(output, "hello cat\r\n\
         hello cat\r\n\
         ^C");
-            println!("about to wait for {}", process.child_pid);
             let should = wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
             assert_eq!(should, wait::waitpid(process.child_pid, None)?);
             Ok(())
