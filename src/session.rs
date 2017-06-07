@@ -19,8 +19,26 @@ pub struct PtySession {
 }
 
 impl PtySession {
-    pub fn send_line(&mut self, line: &str) -> Result<()> {
-        self.writer.write_all(line.as_bytes()).chain_err(|| "cannot write line to process")
+
+    /// sends string and a newline to process
+    ///
+    /// this is guaranteed to be flushed to the process
+    /// returns number of written bytes
+    pub fn send_line(&mut self, line: &str) -> Result<(usize)> {
+        let mut len = self.send(line)?;
+        len += self.writer.write(&['\n' as u8]).chain_err(|| "cannot write newline")?;
+        Ok(len)
+    }
+
+    /// sends string to process. This may be buffered. You may use flush() after send()
+    /// returns number of written bytes
+    pub fn send(&mut self, s: &str) -> Result<(usize)> {
+        self.writer.write(s.as_bytes()).chain_err(|| "cannot write line to process")
+    }
+
+    /// make sure all bytes written via `send()` are sent to the process
+    pub fn flush(&mut self) -> Result<()> {
+        self.writer.flush().chain_err(|| "could not flush")
     }
 
     /// get status of child process, nonblocking
