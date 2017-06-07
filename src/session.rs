@@ -18,6 +18,25 @@ pub struct PtySession {
     reader: BufReader<File>,
 }
 
+/// Start a process in a tty session, write and read from it
+///
+/// # Example
+///
+/// ```
+///
+/// use rexpect::spawn;
+/// # use rexpect::errors::*;
+///
+/// # fn main() {
+///     # || -> Result<()> {
+/// let mut s = spawn("cat")?;
+/// s.send_line("hello, polly!")?;
+/// assert_eq!("hello, polly!", s.read_line()?);
+///         # Ok(())
+///     # }().expect("test failed");
+/// # }
+/// ```
+
 impl PtySession {
 
     /// sends string and a newline to process
@@ -28,6 +47,16 @@ impl PtySession {
         let mut len = self.send(line)?;
         len += self.writer.write(&['\n' as u8]).chain_err(|| "cannot write newline")?;
         Ok(len)
+    }
+
+    /// read one line (blocking!), remove the line ending (because tty it is \r\n) and return it
+    pub fn read_line(&mut self) -> Result<String> {
+        let mut res = String::new();
+        self.reader.read_line(&mut res).chain_err(|| "failed to read 1 line")?;
+        if res.pop() != Some('\n') || res.pop() != Some('\r') {
+            return Err("line did not end with \\r\\n".into())
+        }
+        Ok(res)
     }
 
     /// sends string to process. This may be buffered. You may use flush() after send()
@@ -106,8 +135,10 @@ mod tests {
         || -> Result<()> {
             let mut s = spawn("cat")?;
             s.send_line("hans")?;
+            assert_eq!("hans", s.read_line()?);
             s.exit()?;
-            println!("status={:?}", s.wait()?);
+            let should = wait::WaitStatus::Signaled(s.process.child_pid, signal::Signal::SIGTERM, false);
+            assert_eq!(should, s.wait()?);
             Ok(())
         }().expect("could not execute");
     }
