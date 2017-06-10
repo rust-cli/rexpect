@@ -14,5 +14,12 @@ extern crate lazy_static;
 
 pub mod errors {
     // Create the Error, ErrorKind, ResultExt, and Result types
-    error_chain!{}
+    error_chain!{
+        errors {
+            EOF {
+                description("An error occurred during startup")
+                display("Startup aborted: did not complete successfully")
+            }
+        }
+    }
 }
