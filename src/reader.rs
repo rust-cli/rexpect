@@ -1,7 +1,6 @@
 use std::fs;
 use std::io::{BufReader, self};
 use std::io::prelude::*;
-use std::string::FromUtf8Error;
 use std::sync::mpsc::{channel, Receiver};
 use std::{thread, result};
 use errors::*; // load error-chain
@@ -9,67 +8,66 @@ use errors::*; // load error-chain
 #[derive(Debug)]
 enum PipeError {
     IO(io::Error),
-    NotUtf8(FromUtf8Error),
 }
 
 #[derive(Debug)]
-enum PipedLine {
-    Line(String),
+enum PipedChar {
+    Char(u8),
     EOF,
 }
 
 /// Non-Blocking reader
 pub struct NBReader {
-    reader: Receiver<result::Result<PipedLine, PipeError>>,
+    reader: Receiver<result::Result<PipedChar, PipeError>>,
+    buffer: String
 }
 
 impl NBReader {
     pub fn new(f: fs::File) -> NBReader {
         let (tx, rx) = channel();
 
-        // spawn a thread which reads one line and sends it to tx
+        // spawn a thread which reads one char and sends it to tx
         thread::spawn(move || {
             let mut reader = BufReader::new(f);
-            let mut buf = Vec::new();
             let mut byte = [0u8];
             loop {
                 match reader.read(&mut byte) {
                     Ok(0) => {
-                        let _ = tx.send(Ok(PipedLine::EOF));
+                        let _ = tx.send(Ok(PipedChar::EOF));
                         break;
                     }
                     Ok(_) => {
-                        if byte[0] == 0x0A { // \n
-                            tx.send(match String::from_utf8(buf.clone()) {
-                                Ok(line) => Ok(PipedLine::Line(line)),
-                                Err(err) => Err(PipeError::NotUtf8(err)),
-                            }).expect("cannot send to channel");
-                            buf.clear();
-                        } else if byte[0] == 0x0D { // \r
-                            // eat \r
-                        } else {
-                            buf.push(byte[0]);
-                        }
+                        tx.send(Ok(PipedChar::Char(byte[0]))).expect("cannot send char");
                     }
                     Err(error) => {
-                        tx.send(Err(PipeError::IO(error))).unwrap();
+                        tx.send(Err(PipeError::IO(error))).expect("cannot send error");
                     }
                 }
             };
         });
-        NBReader{reader: rx}
+        NBReader{reader: rx, buffer: String::with_capacity(1024)}
     }
 
-    /// read one line (blocking!), remove the line ending (because tty it is \r\n) and return it
+    /// reads all available chars from the read channel and stores them in self.buffer
+    fn read_into_buffer(&mut self) -> Result<()> {
+        while let Ok(from_channel) = self.reader.try_recv() {
+            match from_channel {
+                Ok(PipedChar::Char(c)) => self.buffer.push(c as char),
+                Ok(PipedChar::EOF) => return Err(ErrorKind::EOF.into()),
+                Err(_) => return Err("cannot read from channel".into())
+            }
+        }
+        Ok(())
+    }
+
+    /// read one line (blocking!) and return line including newline (\r\n for tty processes)
     /// TODO: example on how to check for EOF
     pub fn read_line(&mut self) -> Result<String> {
-        match self.reader.recv().chain_err(|| "cannot read from channel")? {
-            Ok(PipedLine::Line(s)) => Ok(s),
-            Ok(PipedLine::EOF) => Err(ErrorKind::EOF.into()),
-            Err(error) => match error {
-                PipeError::NotUtf8(_) => Err("got non utf8 byte".into()),
-                PipeError::IO(_) => Err("got an IO error".into())
-            },
+        loop {
+            self.read_into_buffer()?;
+            if let Some(pos) = self.buffer.find('\n') {
+                return Ok((&self.buffer[0..pos + 1]).to_string());
+            }
         }
     }
 

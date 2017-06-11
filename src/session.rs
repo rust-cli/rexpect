@@ -32,7 +32,7 @@ pub struct PtySession {
 ///     # || -> Result<()> {
 /// let mut s = spawn("cat")?;
 /// s.send_line("hello, polly!")?;
-/// assert_eq!("hello, polly!", s.read_line()?);
+/// assert_eq!("hello, polly!\r\n", s.read_line()?);
 ///         # Ok(())
 ///     # }().expect("test failed");
 /// # }
@@ -131,7 +131,7 @@ mod tests {
         || -> Result<()> {
             let mut s = spawn("cat")?;
             s.send_line("hans")?;
-            assert_eq!("hans", s.read_line()?);
+            assert_eq!("hans\r\n", s.read_line()?);
             s.exit()?;
             let should = wait::WaitStatus::Signaled(s.process.child_pid, signal::Signal::SIGTERM, false);
             assert_eq!(should, s.wait()?);
