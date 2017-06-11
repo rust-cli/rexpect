@@ -6,7 +6,7 @@ use std::process::Command;
 use std::os::unix::process::CommandExt;
 use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
 use nix::fcntl::{O_RDWR, open};
-use nix::sys::{stat};
+use nix::sys::stat;
 use nix::unistd::{fork, ForkResult, setsid, dup2};
 use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 use errors::*; // load error-chain
@@ -69,6 +69,7 @@ impl PtyProcess {
             #[cfg(target_os = "linux")]
             let slave_name = ptsname_r(&master_fd)?;
             #[cfg(not(target_os = "linux"))]
+            // TODO: this doesn't seem to work on OSX, Travis reports blocked processes because of race conditions..
             let slave_name = {
                 let _ = PTSNAME_MUTEX.lock();
                 ptsname(&master_fd)?
@@ -122,16 +123,19 @@ mod tests {
             writer.write(&[3])?;
             writer.flush()?;
 
-            let mut buf = [0;2];
+            let mut buf = [0; 2];
             reader.read(&mut buf)?;
             output += &String::from_utf8_lossy(&buf).to_string();
 
-            assert_eq!(output, "hello cat\r\n\
+            assert_eq!(output,
+                       "hello cat\r\n\
         hello cat\r\n\
         ^C");
-            let should = wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
+            let should =
+                wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
             assert_eq!(should, wait::waitpid(process.child_pid, None)?);
             Ok(())
-        }().expect("could not execute cat");
+        }()
+                .expect("could not execute cat");
     }
 }

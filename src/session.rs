@@ -1,13 +1,11 @@
 //! Main module of rexpect: start new process and interact with it
 
 use process::PtyProcess;
-use std::io::{BufReader, LineWriter, self};
+use reader::NBReader;
+use std::io::LineWriter;
 use std::ffi::OsStr;
-use std::sync::mpsc::{channel, Receiver};
 use std::fs::File;
-use std::{thread, result};
 use std::process::Command;
-use std::string::FromUtf8Error;
 use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::io::prelude::*;
 use nix::sys::{wait, signal};
@@ -18,19 +16,7 @@ use errors::*; // load error-chain
 pub struct PtySession {
     process: PtyProcess,
     writer: LineWriter<File>,
-    reader: Receiver<result::Result<PipedLine, PipeError>>,
-}
-
-#[derive(Debug)]
-enum PipeError {
-    IO(io::Error),
-    NotUtf8(FromUtf8Error),
-}
-
-#[derive(Debug)]
-enum PipedLine {
-    Line(String),
-    EOF,
+    reader: NBReader,
 }
 
 /// Start a process in a tty session, write and read from it
@@ -64,18 +50,6 @@ impl PtySession {
         Ok(len)
     }
 
-    /// read one line (blocking!), remove the line ending (because tty it is \r\n) and return it
-    /// TODO: example on how to check for EOF
-    pub fn read_line(&mut self) -> Result<String> {
-        match self.reader.recv().chain_err(|| "cannot read from channel")? {
-            Ok(PipedLine::Line(s)) => Ok(s),
-            Ok(PipedLine::EOF) => Err(ErrorKind::EOF.into()),
-            Err(error) => match error {
-                PipeError::NotUtf8(_) => Err("got non utf8 byte".into()),
-                PipeError::IO(_) => Err("got an IO error".into())
-            },
-        }
-    }
 
     /// sends string to process. This may be buffered. You may use flush() after send()
     /// returns number of written bytes
@@ -130,6 +104,10 @@ impl PtySession {
             signal::kill(self.process.child_pid, sig)
         ).chain_err(|| "failed to exit process")
     }
+
+    pub fn read_line(&mut self) -> Result<String> {
+        self.reader.read_line()
+    }
 }
 
 pub fn spawn<S: AsRef<OsStr>>(program: S) -> Result<PtySession> {
@@ -137,42 +115,11 @@ pub fn spawn<S: AsRef<OsStr>>(program: S) -> Result<PtySession> {
     let process = PtyProcess::new(command).chain_err(|| "couldn't start process")?;
     let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
     let writer = LineWriter::new(f.try_clone().chain_err(|| "couldn't open write stream")?);
-    let (tx, rx) = channel();
-
-    // spawn a thread which reads one line and sends it to tx
-    thread::spawn(move || {
-        let mut reader = BufReader::new(f);
-        let mut buf = Vec::new();
-        let mut byte = [0u8];
-        loop {
-            match reader.read(&mut byte) {
-                Ok(0) => {
-                    let _ = tx.send(Ok(PipedLine::EOF));
-                    break;
-                }
-                Ok(_) => {
-                    if byte[0] == 0x0A { // \n
-                        tx.send(match String::from_utf8(buf.clone()) {
-                            Ok(line) => Ok(PipedLine::Line(line)),
-                            Err(err) => Err(PipeError::NotUtf8(err)),
-                        }).expect("cannot send to channel");
-                        buf.clear();
-                    } else if byte[0] == 0x0D { // \r
-                        // eat \r
-                    } else {
-                        buf.push(byte[0]);
-                    }
-                }
-                Err(error) => {
-                    tx.send(Err(PipeError::IO(error))).unwrap();
-                }
-            }
-        };
-    });
+    let reader = NBReader::new(f);
     Ok(PtySession {
            process: process,
            writer: writer,
-           reader: rx,
+           reader: reader,
        })
 }
 
