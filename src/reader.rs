@@ -45,6 +45,8 @@ impl NBReader {
                 }
             };
         });
+        // allocate string with a initial capacity of 1024, so when appending chars
+        // we don't need to reallocate memory often
         NBReader{reader: rx, buffer: String::with_capacity(1024)}
     }
 
@@ -66,7 +68,17 @@ impl NBReader {
         loop {
             self.read_into_buffer()?;
             if let Some(pos) = self.buffer.find('\n') {
-                return Ok((&self.buffer[0..pos + 1]).to_string());
+                return Ok(self.buffer.drain(..pos + 1).collect())
+            }
+        }
+    }
+
+    pub fn expect(&mut self, needle: &str) -> Result<()> {
+        loop {
+            self.read_into_buffer()?;
+            if let Some(pos) = self.buffer.find(needle) {
+                self.buffer.drain(..pos + 1);
+                return Ok(())
             }
         }
     }
