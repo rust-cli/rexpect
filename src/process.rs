@@ -69,7 +69,6 @@ impl PtyProcess {
             #[cfg(target_os = "linux")]
             let slave_name = ptsname_r(&master_fd)?;
             #[cfg(not(target_os = "linux"))]
-            // TODO: this doesn't seem to work on OSX, Travis reports blocked processes because of race conditions..
             let slave_name = {
                 let lock = PTSNAME_MUTEX.lock().unwrap();
                 ptsname(&master_fd)?
