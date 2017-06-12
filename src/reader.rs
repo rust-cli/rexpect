@@ -3,6 +3,7 @@ use std::io::prelude::*;
 use std::sync::mpsc::{channel, Receiver};
 use std::{thread, result};
 use errors::*; // load error-chain
+use regex;
 
 #[derive(Debug)]
 enum PipeError {
@@ -13,6 +14,12 @@ enum PipeError {
 enum PipedChar {
     Char(u8),
     EOF,
+}
+
+pub enum MatchMethod {
+    FindString(String),
+    FindRegex(regex::Regex),
+    FindEOF,
 }
 
 /// Non-Blocking reader
@@ -69,6 +76,9 @@ impl NBReader {
     /// TODO: example on how to check for EOF
     pub fn read_line(&mut self) -> Result<String> {
         loop {
+            if self.eof {
+                return Err(ErrorKind::EOF.into());
+            }
             self.read_into_buffer()?;
             if let Some(pos) = self.buffer.find('\n') {
                 return Ok(self.buffer.drain(..pos + 1).collect())
@@ -76,12 +86,41 @@ impl NBReader {
         }
     }
 
-    pub fn expect(&mut self, needle: &str) -> Result<()> {
+    pub fn expect(&mut self, needle: &MatchMethod) -> Result<()> {
+        use self::MatchMethod::*;
         loop {
+            if self.eof {
+                if let &FindEOF = needle {
+                    return Ok(());
+                }
+                return Err(ErrorKind::EOF.into());
+            }
             self.read_into_buffer()?;
-            if let Some(pos) = self.buffer.find(needle) {
-                self.buffer.drain(..pos + 1);
-                return Ok(())
+            let pos = match needle {
+                &FindString(ref s) => {
+                    self.buffer.find(s)
+                },
+                &FindRegex(ref r) => {
+                    println!("regex..");
+                    if let Some(mat) = r.find(&self.buffer) {
+                        Some(mat.end())
+                    } else {
+                        println!("no match this time..");
+                        None
+                    }
+                },
+                &FindEOF => {
+                    None
+                }
+            };
+            if let Some(pos) = pos {
+                if pos == self.buffer.len() {
+                    self.buffer.drain(..);
+                    return Ok(())
+                } else {
+                    self.buffer.drain(..pos + 1);
+                    return Ok(())
+                }
             }
         }
     }
@@ -92,9 +131,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_expect_string() {
-        let f = io::Cursor::new("hans\r\n");
+    fn test_expect_melon() {
+        let f = io::Cursor::new("a melon\r\n");
         let mut r = NBReader::new(f);
-        assert_eq!("hans\r\n", r.read_line().expect("cannot read line"));
+        assert_eq!("a melon\r\n", r.read_line().expect("cannot read line"));
+        // check for EOF
+        match r.read_line() {
+            Ok(_) => assert!(false),
+            Err(Error(ErrorKind::EOF, _)) => {} ,
+            Err(Error(_, _)) => {assert!(false)},
+        }
     }
+
+    #[test]
+    fn test_regex() {
+        let f = io::Cursor::new("2014-03-15");
+        let mut r = NBReader::new(f);
+        let re = regex::Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
+        r.expect(&MatchMethod::FindRegex(re)).expect("regex doesn't match");
+    }
+
 }
