@@ -20,7 +20,7 @@ use nix::pty::ptsname;
 use std::sync::Mutex;
 #[cfg(not(target_os = "linux"))]
 lazy_static! {
-    static ref PTSNAME_MUTEX: Mutex<()> = { println!("singleton.."); Mutex::new(()) };
+    static ref PTSNAME_MUTEX: Mutex<()> = Mutex::new(());
 }
 
 /// Starts a process in a forked tty so you can interact with it sams as with in a terminal
@@ -71,7 +71,7 @@ impl PtyProcess {
             #[cfg(not(target_os = "linux"))]
             // TODO: this doesn't seem to work on OSX, Travis reports blocked processes because of race conditions..
             let slave_name = {
-                let _ = PTSNAME_MUTEX.lock();
+                let lock = PTSNAME_MUTEX.lock().unwrap();
                 ptsname(&master_fd)?
             };
 

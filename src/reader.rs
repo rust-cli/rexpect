@@ -1,4 +1,3 @@
-use std::fs;
 use std::io::{BufReader, self};
 use std::io::prelude::*;
 use std::sync::mpsc::{channel, Receiver};
