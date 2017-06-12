@@ -19,11 +19,12 @@ enum PipedChar {
 /// Non-Blocking reader
 pub struct NBReader {
     reader: Receiver<result::Result<PipedChar, PipeError>>,
-    buffer: String
+    buffer: String,
+    eof: bool
 }
 
 impl NBReader {
-    pub fn new(f: fs::File) -> NBReader {
+    pub fn new<R:Read+Send+ 'static>(f: R) -> NBReader {
         let (tx, rx) = channel();
 
         // spawn a thread which reads one char and sends it to tx
@@ -47,15 +48,18 @@ impl NBReader {
         });
         // allocate string with a initial capacity of 1024, so when appending chars
         // we don't need to reallocate memory often
-        NBReader{reader: rx, buffer: String::with_capacity(1024)}
+        NBReader{reader: rx, buffer: String::with_capacity(1024), eof: false}
     }
 
     /// reads all available chars from the read channel and stores them in self.buffer
     fn read_into_buffer(&mut self) -> Result<()> {
+        if self.eof {
+            return Ok(())
+        }
         while let Ok(from_channel) = self.reader.try_recv() {
             match from_channel {
                 Ok(PipedChar::Char(c)) => self.buffer.push(c as char),
-                Ok(PipedChar::EOF) => return Err(ErrorKind::EOF.into()),
+                Ok(PipedChar::EOF) => self.eof = true,
                 Err(_) => return Err("cannot read from channel".into())
             }
         }
@@ -82,5 +86,16 @@ impl NBReader {
             }
         }
     }
+}
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_expect_string() {
+        let f = io::Cursor::new("hans\r\n");
+        let mut r = NBReader::new(f);
+        assert_eq!("hans\r\n", r.read_line().expect("cannot read line"));
+    }
 }
