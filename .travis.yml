@@ -14,7 +14,7 @@ os:
   - osx
 
 script:
-  - cargo build --verbose -- --nocapture
+  - cargo build --verbose
   - cargo test --verbose -- --nocapture
   - |
       if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
