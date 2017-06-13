@@ -1,7 +1,7 @@
 //! Start a process via pty
 
 use std::io;
-use std::path::{Path};
+use std::path;
 use std::process::Command;
 use std::os::unix::process::CommandExt;
 use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
@@ -14,12 +14,6 @@ use errors::*; // load error-chain
 #[cfg(target_os = "linux")]
 use nix::pty::ptsname_r;
 
-#[cfg(target_os = "macos")]
-use nix::libc::{ioctl, TIOCPTYGNAME};
-#[cfg(target_os = "macos")]
-use std::path::PathBuf;
-#[cfg(target_os = "macos")]
-use std::os::unix::io::RawFd;
 
 /// Starts a process in a forked tty so you can interact with it sams as with in a terminal
 ///
@@ -58,14 +52,17 @@ pub struct PtyProcess {
 /// ioctl(fd, TIOCPTYGNAME, buf) manually
 /// the buffer size on OSX is 128, defined by sys/ttycom.h
 /// taken from https://blog.tarq.io/ptsname-on-osx-with-rust/
-fn get_slave_name(fd: RawFd) -> io::Result<PathBuf> {
+fn get_slave_name(ptym: PtyMaster) -> io::Result<path::PathBuf> {
     use std::os::unix::ffi::OsStrExt;
     use std::ffi::{CStr,OsStr};
     use std::os::raw::c_char;
     use std::path::PathBuf;
-    //
-    //
+    use std::os::unix::io::{FromRawFd, AsRawFd};
+    use nix::libc::{ioctl, TIOCPTYGNAME};
+
+
     let mut buf : [c_char; 128] = [0;128];
+    let fd = ptym.as_raw_fd();
 
     unsafe {
         match ioctl(fd, TIOCPTYGNAME as u64, &buf) {
@@ -96,7 +93,7 @@ impl PtyProcess {
             #[cfg(target_os = "linux")]
             let slave_name = ptsname_r(&master_fd)?;
             #[cfg(target_os = "macos")]
-            let slave_name = get_slave_name()?.to_str().expect("got no tty path");
+            let slave_name = get_slave_name(&master_fd)?.to_str().expect("got no tty path");
             println!("after lock");
 
             println!("ptsname: {} <=================", slave_name);
@@ -104,7 +101,7 @@ impl PtyProcess {
             match fork()? {
                 ForkResult::Child => {
                     setsid()?; // create new session with child as session leader
-                    let slave_fd = open(Path::new(&slave_name), O_RDWR, stat::Mode::empty())?;
+                    let slave_fd = open(path::Path::new(&slave_name), O_RDWR, stat::Mode::empty())?;
 
                     // assign stdin, stdout, stderr to the tty, just like a terminal does
                     dup2(slave_fd, STDIN_FILENO)?;
