@@ -35,22 +35,27 @@ impl NBReader {
 
         // spawn a thread which reads one char and sends it to tx
         thread::spawn(move || {
-            let mut reader = BufReader::new(f);
-            let mut byte = [0u8];
-            loop {
-                match reader.read(&mut byte) {
-                    Ok(0) => {
-                        let _ = tx.send(Ok(PipedChar::EOF));
-                        break;
+            let _ = || -> Result<()> {
+                let mut reader = BufReader::new(f);
+                let mut byte = [0u8];
+                loop {
+                    match reader.read(&mut byte) {
+                        Ok(0) => {
+                            let _ = tx.send(Ok(PipedChar::EOF)).chain_err(|| "cannot send")?;
+                            break;
+                        }
+                        Ok(_) => {
+                            tx.send(Ok(PipedChar::Char(byte[0]))).chain_err(|| "cannot send")?;
+                        }
+                        Err(error) => {
+                            tx.send(Err(PipeError::IO(error))).chain_err(|| "cannot send")?;
+                        }
                     }
-                    Ok(_) => {
-                        tx.send(Ok(PipedChar::Char(byte[0]))).expect("cannot send char");
-                    }
-                    Err(error) => {
-                        tx.send(Err(PipeError::IO(error))).expect("cannot send error");
-                    }
-                }
-            };
+                };
+                Ok(())
+            }();
+            // don't do error handling as on an error it was most probably the main thread which exited
+            // (remote hangup)
         });
         // allocate string with a initial capacity of 1024, so when appending chars
         // we don't need to reallocate memory often
@@ -116,11 +121,10 @@ impl NBReader {
             if let Some(pos) = pos {
                 if pos == self.buffer.len() {
                     self.buffer.drain(..);
-                    return Ok(())
                 } else {
                     self.buffer.drain(..pos + 1);
-                    return Ok(())
                 }
+                return Ok(())
             }
         }
     }
