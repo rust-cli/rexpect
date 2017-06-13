@@ -52,7 +52,7 @@ pub struct PtyProcess {
 /// ioctl(fd, TIOCPTYGNAME, buf) manually
 /// the buffer size on OSX is 128, defined by sys/ttycom.h
 /// taken from https://blog.tarq.io/ptsname-on-osx-with-rust/
-fn get_slave_name(ptym: PtyMaster) -> io::Result<path::PathBuf> {
+fn get_slave_name(ptym: &PtyMaster) -> io::Result<path::PathBuf> {
     use std::os::unix::ffi::OsStrExt;
     use std::ffi::{CStr,OsStr};
     use std::os::raw::c_char;
