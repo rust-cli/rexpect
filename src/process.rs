@@ -1,7 +1,7 @@
 //! Start a process via pty
 
 use std::io;
-use std::path::Path;
+use std::path::{Path};
 use std::process::Command;
 use std::os::unix::process::CommandExt;
 use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
@@ -14,14 +14,12 @@ use errors::*; // load error-chain
 #[cfg(target_os = "linux")]
 use nix::pty::ptsname_r;
 
-#[cfg(not(target_os = "linux"))]
-use nix::pty::ptsname;
-#[cfg(not(target_os = "linux"))]
-use std::sync::Mutex;
-#[cfg(not(target_os = "linux"))]
-lazy_static! {
-    static ref PTSNAME_MUTEX: Mutex<()> = Mutex::new(());
-}
+#[cfg(target_os = "macos")]
+use nix::libc::{ioctl, TIOCPTYGNAME};
+#[cfg(target_os = "macos")]
+use std::path::PathBuf;
+#[cfg(target_os = "macos")]
+use std::os::unix::io::RawFd;
 
 /// Starts a process in a forked tty so you can interact with it sams as with in a terminal
 ///
@@ -54,6 +52,37 @@ pub struct PtyProcess {
     pub child_pid: i32,
 }
 
+#[cfg(target_os = "macos")]
+/// ptsname_r is a linux extension but ptsname isn't thread-safe
+/// we could use a static mutex but instead we re-implemented ptsname_r with a syscall
+/// ioctl(fd, TIOCPTYGNAME, buf) manually
+/// the buffer size on OSX is 128, defined by sys/ttycom.h
+/// taken from https://blog.tarq.io/ptsname-on-osx-with-rust/
+fn get_slave_name(fd: RawFd) -> io::Result<PathBuf> {
+    use std::os::unix::ffi::OsStrExt;
+    use std::ffi::{CStr,OsStr};
+    use std::os::raw::c_char;
+    use std::path::PathBuf;
+    //
+    //
+    let mut buf : [c_char; 128] = [0;128];
+
+    unsafe {
+        match ioctl(fd, TIOCPTYGNAME as u64, &buf) {
+            0 => {
+                Ok(PathBuf::from(
+                    OsStr::from_bytes(
+                        CStr::from_ptr(buf.as_ptr())
+                            .to_bytes()
+                        )
+                    )
+                )
+            },
+            _ => Err(io::Error::last_os_error()),
+        }
+    }
+}
+
 impl PtyProcess {
     pub fn new(mut command: Command) -> Result<Self> {
         || -> io::Result<Self> {
@@ -64,16 +93,13 @@ impl PtyProcess {
             grantpt(&master_fd)?;
             unlockpt(&master_fd)?;
 
-            // ptsname is not thread-safe. There is ptsname_r which is only available on Linux
-            // -> use ptsname_r on Linux, for other OS use a mutex
             #[cfg(target_os = "linux")]
             let slave_name = ptsname_r(&master_fd)?;
-            #[cfg(not(target_os = "linux"))]
-            let slave_name = {
-                let lock = PTSNAME_MUTEX.lock().unwrap();
-                ptsname(&master_fd)?
-            };
-            println!("ptsname: {}", slave_name);
+            #[cfg(target_os = "macos")]
+            let slave_name = get_slave_name()?.to_str().expect("got no tty path");
+            println!("after lock");
+
+            println!("ptsname: {} <=================", slave_name);
 
             match fork()? {
                 ForkResult::Child => {

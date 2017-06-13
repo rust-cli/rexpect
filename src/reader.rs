@@ -106,11 +106,9 @@ impl NBReader {
                     self.buffer.find(s)
                 },
                 &FindRegex(ref r) => {
-                    println!("regex..");
                     if let Some(mat) = r.find(&self.buffer) {
                         Some(mat.end())
                     } else {
-                        println!("no match this time..");
                         None
                     }
                 },
