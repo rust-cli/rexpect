@@ -73,6 +73,7 @@ impl PtyProcess {
                 let lock = PTSNAME_MUTEX.lock().unwrap();
                 ptsname(&master_fd)?
             };
+            println!("ptsname: {}", slave_name);
 
             match fork()? {
                 ForkResult::Child => {

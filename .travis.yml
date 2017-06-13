@@ -14,8 +14,8 @@ os:
   - osx
 
 script:
-  - cargo build --verbose
-  - cargo test --verbose
+  - cargo build --verbose -- --nocapture
+  - cargo test --verbose -- --nocapture
   - |
       if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
         travis-cargo build &&
@@ -30,3 +30,4 @@ after_success:
 env:
   global:
     - TRAVIS_CARGO_NIGHTLY_FEATURE=""
+    - RUST_BACKTRACE="1"
