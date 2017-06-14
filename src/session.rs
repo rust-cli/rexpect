@@ -31,8 +31,12 @@ pub struct PtySession {
 /// # fn main() {
 ///     # || -> Result<()> {
 /// let mut s = spawn("cat")?;
+/// println!("doctest 1");
 /// s.send_line("hello, polly!")?;
-/// assert_eq!("hello, polly!\r\n", s.read_line()?);
+/// println!("doctest 2");
+/// let line = s.read_line()?;
+/// println!("doctest 3");
+/// assert_eq!("hello, polly!\r\n", line);
 ///         # Ok(())
 ///     # }().expect("test failed");
 /// # }
@@ -129,11 +133,17 @@ mod tests {
     #[test]
     fn test_cat2() {
         || -> Result<()> {
+            println!("cat1");
             let mut s = spawn("cat")?;
+            println!("cat2");
             s.send_line("hans")?;
+            println!("cat3");
             assert_eq!("hans\r\n", s.read_line()?);
+            println!("cat4");
             s.exit()?;
+            println!("cat5");
             let should = wait::WaitStatus::Signaled(s.process.child_pid, signal::Signal::SIGTERM, false);
+            println!("cat6");
             assert_eq!(should, s.wait()?);
             Ok(())
         }().expect("could not execute");
