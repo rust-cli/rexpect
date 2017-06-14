@@ -80,8 +80,6 @@ impl PtyProcess {
             unlockpt(&master_fd)?;
 
             let slave_name = ptsname_r(&master_fd)?;
-            println!("after lock");
-
             println!("ptsname: {} <=================", slave_name);
 
             match fork()? {
