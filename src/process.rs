@@ -11,9 +11,6 @@ use nix::unistd::{fork, ForkResult, setsid, dup2};
 use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 use errors::*; // load error-chain
 
-#[cfg(target_os = "linux")]
-use nix::pty::ptsname_r;
-
 
 /// Starts a process in a forked tty so you can interact with it sams as with in a terminal
 ///
@@ -46,35 +43,27 @@ pub struct PtyProcess {
     pub child_pid: i32,
 }
 
+
+#[cfg(target_os = "linux")]
+use nix::pty::ptsname_r;
+
 #[cfg(target_os = "macos")]
 /// ptsname_r is a linux extension but ptsname isn't thread-safe
-/// we could use a static mutex but instead we re-implemented ptsname_r with a syscall
-/// ioctl(fd, TIOCPTYGNAME, buf) manually
-/// the buffer size on OSX is 128, defined by sys/ttycom.h
-/// taken from https://blog.tarq.io/ptsname-on-osx-with-rust/
-fn get_slave_name(ptym: &PtyMaster) -> io::Result<path::PathBuf> {
-    use std::os::unix::ffi::OsStrExt;
-    use std::ffi::{CStr,OsStr};
-    use std::os::raw::c_char;
-    use std::path::PathBuf;
-    use std::os::unix::io::{FromRawFd, AsRawFd};
+/// instead of using a static mutex this calls ioctl with TIOCPTYGNAME directly
+/// based on https://blog.tarq.io/ptsname-on-osx-with-rust/
+fn ptsname_r(fd: &PtyMaster) -> io::Result<String> {
+    use std::ffi::CStr;
+    use std::os::unix::io::AsRawFd;
     use nix::libc::{ioctl, TIOCPTYGNAME};
 
-
-    let mut buf : [c_char; 128] = [0;128];
-    let fd = ptym.as_raw_fd();
+    /// the buffer size on OSX is 128, defined by sys/ttycom.h
+    let buf: [i8; 128] = [0; 128];
 
     unsafe {
-        match ioctl(fd, TIOCPTYGNAME as u64, &buf) {
+        match ioctl(fd.as_raw_fd(), TIOCPTYGNAME as u64, &buf) {
             0 => {
-                Ok(PathBuf::from(
-                    OsStr::from_bytes(
-                        CStr::from_ptr(buf.as_ptr())
-                            .to_bytes()
-                        )
-                    )
-                )
-            },
+                Ok(CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned())
+            }
             _ => Err(io::Error::last_os_error()),
         }
     }
@@ -90,10 +79,7 @@ impl PtyProcess {
             grantpt(&master_fd)?;
             unlockpt(&master_fd)?;
 
-            #[cfg(target_os = "linux")]
             let slave_name = ptsname_r(&master_fd)?;
-            #[cfg(target_os = "macos")]
-            let slave_name = get_slave_name(&master_fd)?.to_str().expect("got no tty path");
             println!("after lock");
 
             println!("ptsname: {} <=================", slave_name);
@@ -109,15 +95,16 @@ impl PtyProcess {
                     dup2(slave_fd, STDERR_FILENO)?;
                     command.exec();
                     Err(io::Error::last_os_error())
-                },
+                }
                 ForkResult::Parent { child: child_pid } => {
                     Ok(PtyProcess {
-                        pty: master_fd,
-                        child_pid: child_pid,
-                    })
+                           pty: master_fd,
+                           child_pid: child_pid,
+                       })
                 }
             }
-        }().chain_err(|| format!("could not execute {:?}", command))
+        }()
+                .chain_err(|| format!("could not execute {:?}", command))
     }
 }
 
