@@ -1,6 +1,6 @@
 //! Start a process via pty
 
-use std::path;
+use std;
 use std::process::Command;
 use std::os::unix::process::CommandExt;
 use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
@@ -51,7 +51,7 @@ use nix::pty::ptsname_r;
 /// ptsname_r is a linux extension but ptsname isn't thread-safe
 /// instead of using a static mutex this calls ioctl with TIOCPTYGNAME directly
 /// based on https://blog.tarq.io/ptsname-on-osx-with-rust/
-fn ptsname_r(fd: &PtyMaster) -> io::Result<String> {
+fn ptsname_r(fd: &PtyMaster) -> std::io::Result<String> {
     use std::ffi::CStr;
     use std::os::unix::io::AsRawFd;
     use nix::libc::{ioctl, TIOCPTYGNAME};
@@ -64,7 +64,7 @@ fn ptsname_r(fd: &PtyMaster) -> io::Result<String> {
             0 => {
                 Ok(CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned())
             }
-            _ => Err(io::Error::last_os_error()),
+            _ => Err(std::io::Error::last_os_error()),
         }
     }
 }
@@ -87,7 +87,7 @@ impl PtyProcess {
             match fork()? {
                 ForkResult::Child => {
                     setsid()?; // create new session with child as session leader
-                    let slave_fd = open(path::Path::new(&slave_name), O_RDWR, stat::Mode::empty())?;
+                    let slave_fd = open(std::path::Path::new(&slave_name), O_RDWR, stat::Mode::empty())?;
 
                     // assign stdin, stdout, stderr to the tty, just like a terminal does
                     dup2(slave_fd, STDIN_FILENO)?;
