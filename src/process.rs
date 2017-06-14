@@ -74,6 +74,7 @@ impl PtyProcess {
         || -> nix::Result<Self> {
             // Open a new PTY master
             let master_fd = posix_openpt(O_RDWR)?;
+            println!("{:?}", master_fd);
 
             // Allow a slave to be generated for it
             grantpt(&master_fd)?;
