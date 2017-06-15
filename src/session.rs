@@ -145,6 +145,7 @@ mod tests {
             let should = wait::WaitStatus::Signaled(s.process.child_pid, signal::Signal::SIGTERM, false);
             println!("cat6");
             assert_eq!(should, s.wait()?);
+            println!("cat7");
             Ok(())
         }().expect("could not execute");
     }

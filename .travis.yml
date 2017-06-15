@@ -4,13 +4,11 @@ sudo: false
 rust:
   - nightly
   - stable
-  - beta
 
 before_script:
   - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 
 os:
-  - linux
   - osx
 
 script:
@@ -31,3 +29,4 @@ env:
   global:
     - TRAVIS_CARGO_NIGHTLY_FEATURE=""
     - RUST_BACKTRACE="1"
+    - RUST_TEST_THREADS="1"
