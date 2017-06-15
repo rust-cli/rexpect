@@ -9,3 +9,4 @@ nix = {git = "https://github.com/nix-rust/nix.git"}
 regex = "0.2"
 error-chain = "0.10"
 lazy_static = "0.2"
+libc="0.2"

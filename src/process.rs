@@ -3,7 +3,7 @@
 use std;
 use std::process::Command;
 use std::os::unix::process::CommandExt;
-use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
+use pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
 use nix::fcntl::{O_RDWR, open};
 use nix;
 use nix::sys::stat;
@@ -45,7 +45,7 @@ pub struct PtyProcess {
 
 
 #[cfg(target_os = "linux")]
-use nix::pty::ptsname_r;
+use pty::ptsname_r;
 
 #[cfg(target_os = "macos")]
 /// ptsname_r is a linux extension but ptsname isn't thread-safe
@@ -76,14 +76,13 @@ impl PtyProcess {
         || -> nix::Result<Self> {
             // Open a new PTY master
             let master_fd = posix_openpt(O_RDWR)?;
-            println!("{:?}", master_fd);
 
             // Allow a slave to be generated for it
             grantpt(&master_fd)?;
             unlockpt(&master_fd)?;
 
             let slave_name = ptsname_r(&master_fd)?;
-            println!("ptsname: {} <=================", slave_name);
+            println!("ptsname: {}, master_fd: {:?}, command: {:?} <=================", slave_name, master_fd, command);
 
             match fork()? {
                 ForkResult::Child => {

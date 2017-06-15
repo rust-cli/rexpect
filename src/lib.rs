@@ -1,9 +1,11 @@
 extern crate nix;
 extern crate regex;
+extern crate libc;
 
 pub mod process;
 pub mod session;
 pub mod reader;
+pub mod pty;
 
 pub use session::spawn;
 
