@@ -8,23 +8,24 @@ use std::fs::File;
 use std::process::Command;
 use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::io::prelude::*;
-use std::thread;
+use std::{thread, time};
 use nix::sys::{wait, signal};
 use errors::*; // load error-chain
 
 /// Interact with a process with read/write/signals, etc.
+#[allow(dead_code)]
 pub struct PtySession {
     process: PtyProcess,
     writer: LineWriter<File>,
     reader: NBReader,
-    commandname: String
+    commandname: String // only for debugging purposes now
 }
 
 /// Start a process in a tty session, write and read from it
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```
 ///
 /// use rexpect::spawn;
 /// # use rexpect::errors::*;
@@ -32,11 +33,8 @@ pub struct PtySession {
 /// # fn main() {
 ///     # || -> Result<()> {
 /// let mut s = spawn("cat")?;
-/// println!("doctest 1");
 /// s.send_line("hello, polly!")?;
-/// println!("doctest 2");
 /// let line = s.read_line()?;
-/// println!("doctest 3");
 /// assert_eq!("hello, polly!\r\n", line);
 ///         # Ok(())
 ///     # }().expect("test failed");
@@ -110,8 +108,8 @@ impl PtySession {
             if status != wait::WaitStatus::StillAlive {
                 return Ok(status);
             }
-            println!("still alive, waiting..");
-            thread::sleep_ms(100);
+            // TODO: should support a timeout
+            thread::sleep(time::Duration::from_millis(100));
         }
         Err("cannot read status, maybe it was already killed..".into())
     }
@@ -123,7 +121,6 @@ impl PtySession {
 
 impl Drop for PtySession {
     fn drop(&mut self) {
-        println!("dropping ptysession for {}", self.commandname);
         match self.status() {
             Ok(wait::WaitStatus::StillAlive) => {self.exit().expect("cannot exit");},
             _ => {}
@@ -152,21 +149,11 @@ mod tests {
     #[test]
     fn test_cat2() {
         || -> Result<()> {
-            println!("cat1");
             let mut s = spawn("cat")?;
-            println!("test_cat2: pid: {}", s.process.child_pid);
-
-            println!("cat2");
             s.send_line("hans")?;
-            println!("cat3");
             assert_eq!("hans\r\n", s.read_line()?);
-            println!("cat4");
-            s.exit()?;
-            println!("cat5");
-//            let should = wait::WaitStatus::Signaled(s.process.child_pid, signal::Signal::SIGTERM, false);
-//            println!("cat6");
-//            assert_eq!(should, s.wait()?);
-//            println!("cat7");
+            let should = wait::WaitStatus::Signaled(s.process.child_pid, signal::Signal::SIGTERM, false);
+            assert_eq!(should, s.exit()?);
             Ok(())
         }().expect("could not execute");
     }

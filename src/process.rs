@@ -3,7 +3,7 @@
 use std;
 use std::process::Command;
 use std::os::unix::process::CommandExt;
-use pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
+use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
 use nix::fcntl::{O_RDWR, open};
 use nix;
 use nix::sys::stat;
@@ -54,7 +54,7 @@ pub struct PtyProcess {
 
 
 #[cfg(target_os = "linux")]
-use pty::ptsname_r;
+use nix::pty::ptsname_r;
 
 #[cfg(target_os = "macos")]
 /// ptsname_r is a linux extension but ptsname isn't thread-safe
@@ -72,7 +72,6 @@ fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
         match ioctl(fd.as_raw_fd(), TIOCPTYGNAME as u64, &buf) {
             0 => {
 	        let res = CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned();
-		println!("returning: res={}", res);
                 Ok(res)
             }
             _ => Err(nix::Error::last()),
@@ -91,7 +90,6 @@ impl PtyProcess {
             unlockpt(&master_fd)?;
 
             let slave_name = ptsname_r(&master_fd)?;
-            println!("ptsname: {}, master_fd: {:?}, command: {:?} <=================", slave_name, master_fd, command);
 
             match fork()? {
                 ForkResult::Child => {
@@ -131,7 +129,6 @@ mod tests {
         // wrapping into closure so I can use ?
         || -> Result<()> {
             let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
-            println!("test_cat: pid: {}", process.child_pid);
             let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
             let mut writer = LineWriter::new(&f);
             let mut reader = BufReader::new(&f);
