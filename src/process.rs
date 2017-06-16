@@ -122,6 +122,7 @@ mod tests {
         // wrapping into closure so I can use ?
         || -> Result<()> {
             let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
+            println!("test_cat: pid: {}", process.child_pid);
             let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
             let mut writer = LineWriter::new(&f);
             let mut reader = BufReader::new(&f);
