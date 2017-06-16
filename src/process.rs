@@ -23,20 +23,29 @@ use errors::*; // load error-chain
 /// # #![allow(unused_mut)]
 /// # #![allow(unused_variables)]
 ///
+/// extern crate nix;
+/// extern crate rexpect;
+///
 /// use rexpect::process::PtyProcess;
 /// use std::process::Command;
 /// use std::fs::File;
 /// use std::io::{BufReader, LineWriter};
 /// use std::os::unix::io::{FromRawFd, AsRawFd};
+/// use nix::sys::signal;
+///
+/// # fn main() {
 ///
 /// let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
 /// let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
 /// let mut writer = LineWriter::new(&f);
 /// let mut reader = BufReader::new(&f);
+/// signal::kill(process.child_pid, signal::SIGTERM).expect("could not terminate process");
 ///
 /// // writer.write() sends strings to `cat`
 /// // writer.reader() reads back what `cat` wrote
 /// // send Ctrl-C with writer.write(&[3]) and writer.flush()
+///
+/// # }
 /// ```
 pub struct PtyProcess {
     pub pty: PtyMaster,
