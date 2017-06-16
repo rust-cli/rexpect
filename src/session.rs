@@ -9,7 +9,6 @@ use std::process::Command;
 use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::io::prelude::*;
 use nix::sys::{wait, signal};
-use nix::unistd;
 use errors::*; // load error-chain
 
 /// Interact with a process with read/write/signals, etc.
@@ -104,9 +103,7 @@ impl PtySession {
     ///
     /// closes the pty session and sends SIGTERM to the process
     pub fn kill(&self, sig:signal::Signal) -> Result<()> {
-        unistd::close(self.process.pty.as_raw_fd()).and_then(|_|
-            signal::kill(self.process.child_pid, sig)
-        ).chain_err(|| "failed to exit process")
+        signal::kill(self.process.child_pid, sig).chain_err(|| "failed to exit process")
     }
 
     pub fn read_line(&mut self) -> Result<String> {
