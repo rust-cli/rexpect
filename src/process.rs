@@ -14,7 +14,10 @@ pub use nix::sys::{wait, signal};
 use errors::*; // load error-chain
 
 
-/// Starts a process in a forked tty so you can interact with it sams as with in a terminal
+/// Starts a process in a forked tty so you can interact with it the same as you would
+/// within a terminal
+///
+/// The process and pty session are killed upon dropping PtyProcess
 ///
 /// # Example
 ///
@@ -33,7 +36,6 @@ use errors::*; // load error-chain
 /// use std::fs::File;
 /// use std::io::{BufReader, LineWriter};
 /// use std::os::unix::io::{FromRawFd, AsRawFd};
-/// use nix::sys::signal;
 ///
 /// # fn main() {
 ///
@@ -41,7 +43,7 @@ use errors::*; // load error-chain
 /// let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
 /// let mut writer = LineWriter::new(&f);
 /// let mut reader = BufReader::new(&f);
-/// signal::kill(process.child_pid, signal::SIGTERM).expect("could not terminate process");
+/// process.exit().expect("could not terminate process");
 ///
 /// // writer.write() sends strings to `cat`
 /// // writer.reader() reads back what `cat` wrote
@@ -73,7 +75,7 @@ fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
     unsafe {
         match ioctl(fd.as_raw_fd(), TIOCPTYGNAME as u64, &buf) {
             0 => {
-	        let res = CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned();
+                let res = CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned();
                 Ok(res)
             }
             _ => Err(nix::Error::last()),
@@ -91,12 +93,15 @@ impl PtyProcess {
             grantpt(&master_fd)?;
             unlockpt(&master_fd)?;
 
+            // on Linux this is the libc function, on OSX this is our implementation of ptsname_r
             let slave_name = ptsname_r(&master_fd)?;
 
             match fork()? {
                 ForkResult::Child => {
                     setsid()?; // create new session with child as session leader
-                    let slave_fd = open(std::path::Path::new(&slave_name), O_RDWR, stat::Mode::empty())?;
+                    let slave_fd = open(std::path::Path::new(&slave_name),
+                                        O_RDWR,
+                                        stat::Mode::empty())?;
 
                     // assign stdin, stdout, stderr to the tty, just like a terminal does
                     dup2(slave_fd, STDIN_FILENO)?;
@@ -112,10 +117,11 @@ impl PtyProcess {
                        })
                 }
             }
-        }().chain_err(|| format!("could not execute {:?}", command))
+        }()
+                .chain_err(|| format!("could not execute {:?}", command))
     }
 
-    /// get status of child process, nonblocking.
+    /// Get status of child process, nonblocking.
     ///
     /// Caution: if the process already died (e.g. because you called `exit()`) this
     /// method will return an Error.
@@ -129,7 +135,8 @@ impl PtyProcess {
     /// use std::process::Command;
     ///
     /// # fn main() {
-    ///     let process = process::PtyProcess::new(Command::new("/path/to/myprog")).expect("could not execute myprog");
+    ///     let cmd = Command::new("/path/to/myprog");
+    ///     let process = process::PtyProcess::new(cmd).expect("could not execute myprog");
     ///     while process.status().unwrap() == process::wait::WaitStatus::StillAlive {
     ///         // do something
     ///     }
@@ -142,22 +149,25 @@ impl PtyProcess {
 
     /// Wait until process has exited. This is a blocking call.
     /// If the process doesn't terminate this will block forever.
-    pub fn wait(&self) ->Result<(wait::WaitStatus)> {
+    pub fn wait(&self) -> Result<(wait::WaitStatus)> {
         wait::waitpid(self.child_pid, None).chain_err(|| "wait: cannot read status")
     }
 
-    /// regularly exit the process
-    ///
-    /// closes the pty session and sends SIGTERM to the process
+    /// regularly exit the process, this method is blocking until the process is dead
     pub fn exit(&self) -> Result<wait::WaitStatus> {
         self.kill(signal::SIGTERM)
     }
 
-    /// kills the process with a specific signal
+    /// kills the process with a specific signal. This method blocks, until the process is dead
     ///
-    /// closes the pty session and sends SIGTERM to the process
-    pub fn kill(&self, sig:signal::Signal) -> Result<wait::WaitStatus> {
-        signal::kill(self.child_pid, sig).chain_err(|| "failed to exit process")?;
+    /// sends SIGTERM to the process, the pty session is closed upon dropping PtyMaster,
+    /// so we don't need to explicitely do that
+    ///
+    /// TODO: we need a method `signal` which doesn't wait for termination
+    /// TODO: this needs some way of timeout before we send a kill -9
+    pub fn kill(&self, sig: signal::Signal) -> Result<wait::WaitStatus> {
+        signal::kill(self.child_pid, sig)
+            .chain_err(|| "failed to exit process")?;
         while let Ok(status) = self.status() {
             if status != wait::WaitStatus::StillAlive {
                 return Ok(status);
@@ -172,7 +182,9 @@ impl PtyProcess {
 impl Drop for PtyProcess {
     fn drop(&mut self) {
         match self.status() {
-            Ok(wait::WaitStatus::StillAlive) => {self.exit().expect("cannot exit");},
+            Ok(wait::WaitStatus::StillAlive) => {
+                self.exit().expect("cannot exit");
+            }
             _ => {}
         }
     }

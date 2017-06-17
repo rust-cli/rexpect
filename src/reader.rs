@@ -1,4 +1,4 @@
-use std::io::{BufReader, self};
+use std::io::{self, BufReader};
 use std::io::prelude::*;
 use std::sync::mpsc::{channel, Receiver};
 use std::{thread, result};
@@ -26,11 +26,11 @@ pub enum MatchMethod {
 pub struct NBReader {
     reader: Receiver<result::Result<PipedChar, PipeError>>,
     buffer: String,
-    eof: bool
+    eof: bool,
 }
 
 impl NBReader {
-    pub fn new<R:Read+Send+ 'static>(f: R) -> NBReader {
+    pub fn new<R: Read + Send + 'static>(f: R) -> NBReader {
         let (tx, rx) = channel();
 
         // spawn a thread which reads one char and sends it to tx
@@ -45,33 +45,39 @@ impl NBReader {
                             break;
                         }
                         Ok(_) => {
-                            tx.send(Ok(PipedChar::Char(byte[0]))).chain_err(|| "cannot send")?;
+                            tx.send(Ok(PipedChar::Char(byte[0])))
+                                .chain_err(|| "cannot send")?;
                         }
                         Err(error) => {
-                            tx.send(Err(PipeError::IO(error))).chain_err(|| "cannot send")?;
+                            tx.send(Err(PipeError::IO(error)))
+                                .chain_err(|| "cannot send")?;
                         }
                     }
-                };
+                }
                 Ok(())
             }();
-            // don't do error handling as on an error it was most probably the main thread which exited
-            // (remote hangup)
+            // don't do error handling as on an error it was most probably
+            // the main thread which exited (remote hangup)
         });
         // allocate string with a initial capacity of 1024, so when appending chars
         // we don't need to reallocate memory often
-        NBReader{reader: rx, buffer: String::with_capacity(1024), eof: false}
+        NBReader {
+            reader: rx,
+            buffer: String::with_capacity(1024),
+            eof: false,
+        }
     }
 
     /// reads all available chars from the read channel and stores them in self.buffer
     fn read_into_buffer(&mut self) -> Result<()> {
         if self.eof {
-            return Ok(())
+            return Ok(());
         }
         while let Ok(from_channel) = self.reader.try_recv() {
             match from_channel {
                 Ok(PipedChar::Char(c)) => self.buffer.push(c as char),
                 Ok(PipedChar::EOF) => self.eof = true,
-                Err(_) => return Err("cannot read from channel".into())
+                Err(_) => return Err("cannot read from channel".into()),
             }
         }
         Ok(())
@@ -86,7 +92,7 @@ impl NBReader {
             }
             self.read_into_buffer()?;
             if let Some(pos) = self.buffer.find('\n') {
-                return Ok(self.buffer.drain(..pos + 1).collect())
+                return Ok(self.buffer.drain(..pos + 1).collect());
             }
         }
     }
@@ -102,19 +108,15 @@ impl NBReader {
             }
             self.read_into_buffer()?;
             let pos = match needle {
-                &FindString(ref s) => {
-                    self.buffer.find(s)
-                },
+                &FindString(ref s) => self.buffer.find(s),
                 &FindRegex(ref r) => {
                     if let Some(mat) = r.find(&self.buffer) {
                         Some(mat.end())
                     } else {
                         None
                     }
-                },
-                &FindEOF => {
-                    None
                 }
+                &FindEOF => None,
             };
             if let Some(pos) = pos {
                 if pos == self.buffer.len() {
@@ -122,7 +124,7 @@ impl NBReader {
                 } else {
                     self.buffer.drain(..pos + 1);
                 }
-                return Ok(())
+                return Ok(());
             }
         }
     }
@@ -140,8 +142,8 @@ mod tests {
         // check for EOF
         match r.read_line() {
             Ok(_) => assert!(false),
-            Err(Error(ErrorKind::EOF, _)) => {} ,
-            Err(Error(_, _)) => {assert!(false)},
+            Err(Error(ErrorKind::EOF, _)) => {}
+            Err(Error(_, _)) => assert!(false),
         }
     }
 
@@ -150,7 +152,8 @@ mod tests {
         let f = io::Cursor::new("2014-03-15");
         let mut r = NBReader::new(f);
         let re = regex::Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
-        r.expect(&MatchMethod::FindRegex(re)).expect("regex doesn't match");
+        r.expect(&MatchMethod::FindRegex(re))
+            .expect("regex doesn't match");
     }
 
 }

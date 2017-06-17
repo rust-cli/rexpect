@@ -1,6 +1,6 @@
 //! Main module of rexpect: start new process and interact with it
 
-use process::{PtyProcess};
+use process::PtyProcess;
 use reader::NBReader;
 use std::io::LineWriter;
 use std::ffi::OsStr;
@@ -16,7 +16,7 @@ pub struct PtySession {
     process: PtyProcess,
     writer: LineWriter<File>,
     reader: NBReader,
-    commandname: String // only for debugging purposes now
+    commandname: String, // only for debugging purposes now
 }
 
 /// Start a process in a tty session, write and read from it
@@ -40,22 +40,27 @@ pub struct PtySession {
 /// ```
 
 impl PtySession {
-
     /// sends string and a newline to process
     ///
     /// this is guaranteed to be flushed to the process
     /// returns number of written bytes
     pub fn send_line(&mut self, line: &str) -> Result<(usize)> {
         let mut len = self.send(line)?;
-        len += self.writer.write(&['\n' as u8]).chain_err(|| "cannot write newline")?;
+        len += self.writer
+            .write(&['\n' as u8])
+            .chain_err(|| "cannot write newline")?;
         Ok(len)
     }
 
 
-    /// sends string to process. This may be buffered. You may use flush() after send()
+    /// sends string to process. This may be buffered. You may use `flush()` after `send()`
     /// returns number of written bytes
+    ///
+    /// TODO: method to send ^C, etc.
     pub fn send(&mut self, s: &str) -> Result<(usize)> {
-        self.writer.write(s.as_bytes()).chain_err(|| "cannot write line to process")
+        self.writer
+            .write(s.as_bytes())
+            .chain_err(|| "cannot write line to process")
     }
 
     /// make sure all bytes written via `send()` are sent to the process
@@ -72,7 +77,8 @@ impl PtySession {
 pub fn spawn<S: AsRef<OsStr>>(program: S) -> Result<PtySession> {
     let command = Command::new(program);
     let commandname = format!("{:?}", &command);
-    let process = PtyProcess::new(command).chain_err(|| "couldn't start process")?;
+    let process = PtyProcess::new(command)
+        .chain_err(|| "couldn't start process")?;
     let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
     let writer = LineWriter::new(f.try_clone().chain_err(|| "couldn't open write stream")?);
     let reader = NBReader::new(f);
@@ -80,7 +86,7 @@ pub fn spawn<S: AsRef<OsStr>>(program: S) -> Result<PtySession> {
            process: process,
            writer: writer,
            reader: reader,
-           commandname: commandname
+           commandname: commandname,
        })
 }
 
@@ -93,10 +99,13 @@ mod tests {
             let mut s = spawn("cat")?;
             s.send_line("hans")?;
             assert_eq!("hans\r\n", s.read_line()?);
-            let should = ::process::wait::WaitStatus::Signaled(s.process.child_pid, ::process::signal::Signal::SIGTERM, false);
+            let should = ::process::wait::WaitStatus::Signaled(s.process.child_pid,
+                                                               ::process::signal::Signal::SIGTERM,
+                                                               false);
             assert_eq!(should, s.process.exit()?);
             Ok(())
-        }().expect("could not execute");
+        }()
+                .expect("could not execute");
     }
 
 }
