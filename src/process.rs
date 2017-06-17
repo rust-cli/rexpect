@@ -3,12 +3,14 @@
 use std;
 use std::process::Command;
 use std::os::unix::process::CommandExt;
+use std::{thread, time};
 use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
 use nix::fcntl::{O_RDWR, open};
 use nix;
 use nix::sys::stat;
 use nix::unistd::{fork, ForkResult, setsid, dup2};
 use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
+pub use nix::sys::{wait, signal};
 use errors::*; // load error-chain
 
 
@@ -111,6 +113,68 @@ impl PtyProcess {
                 }
             }
         }().chain_err(|| format!("could not execute {:?}", command))
+    }
+
+    /// get status of child process, nonblocking.
+    ///
+    /// Caution: if the process already died (e.g. because you called `exit()`) this
+    /// method will return an Error.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    ///
+    /// # extern crate nix;
+    /// # extern crate rexpect;
+    /// use rexpect::process;
+    /// use std::process::Command;
+    ///
+    /// # fn main() {
+    ///     let process = process::PtyProcess::new(Command::new("/path/to/myprog")).expect("could not execute myprog");
+    ///     while process.status().unwrap() == process::wait::WaitStatus::StillAlive {
+    ///         // do something
+    ///     }
+    /// # }
+    /// ```
+    ///
+    pub fn status(&self) -> Result<(wait::WaitStatus)> {
+        wait::waitpid(self.child_pid, Some(wait::WNOHANG)).chain_err(|| "cannot read status")
+    }
+
+    /// Wait until process has exited. This is a blocking call.
+    /// If the process doesn't terminate this will block forever.
+    pub fn wait(&self) ->Result<(wait::WaitStatus)> {
+        wait::waitpid(self.child_pid, None).chain_err(|| "wait: cannot read status")
+    }
+
+    /// regularly exit the process
+    ///
+    /// closes the pty session and sends SIGTERM to the process
+    pub fn exit(&self) -> Result<wait::WaitStatus> {
+        self.kill(signal::SIGTERM)
+    }
+
+    /// kills the process with a specific signal
+    ///
+    /// closes the pty session and sends SIGTERM to the process
+    pub fn kill(&self, sig:signal::Signal) -> Result<wait::WaitStatus> {
+        signal::kill(self.child_pid, sig).chain_err(|| "failed to exit process")?;
+        while let Ok(status) = self.status() {
+            if status != wait::WaitStatus::StillAlive {
+                return Ok(status);
+            }
+            // TODO: should support a timeout
+            thread::sleep(time::Duration::from_millis(100));
+        }
+        Err("cannot read status, maybe it was already killed..".into())
+    }
+}
+
+impl Drop for PtyProcess {
+    fn drop(&mut self) {
+        match self.status() {
+            Ok(wait::WaitStatus::StillAlive) => {self.exit().expect("cannot exit");},
+            _ => {}
+        }
     }
 }
 
