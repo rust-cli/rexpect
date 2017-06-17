@@ -1,6 +1,5 @@
 extern crate nix;
 extern crate regex;
-extern crate libc;
 
 pub mod process;
 pub mod session;
