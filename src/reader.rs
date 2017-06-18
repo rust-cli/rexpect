@@ -3,7 +3,7 @@ use std::io::prelude::*;
 use std::sync::mpsc::{channel, Receiver};
 use std::{thread, result};
 use errors::*; // load error-chain
-use regex;
+pub use regex::Regex;
 
 #[derive(Debug)]
 enum PipeError {
@@ -18,7 +18,7 @@ enum PipedChar {
 
 pub enum ReadUntil {
     String(String),
-    Regex(regex::Regex),
+    Regex(Regex),
     EOF,
     NBytes(usize),
 }
@@ -27,17 +27,18 @@ pub enum ReadUntil {
 ///
 /// Typically you'd need that to check for output of a process without blocking your thread.
 /// Internally a thread is spawned and the output is read ahead so when
-/// calling `read_line` or `expect` it reads from an internal buffer
+/// calling `read_line` or `read_until` it reads from an internal buffer
 ///
-///
-pub struct Expecter {
+/// TODO: method to "check" for output
+/// TODO: way of providing a timeout
+pub struct NBReader {
     reader: Receiver<result::Result<PipedChar, PipeError>>,
     buffer: String,
     eof: bool,
 }
 
-impl Expecter {
-    pub fn new<R: Read + Send + 'static>(f: R) -> Expecter {
+impl NBReader {
+    pub fn new<R: Read + Send + 'static>(f: R) -> NBReader {
         let (tx, rx) = channel();
 
         // spawn a thread which reads one char and sends it to tx
@@ -68,7 +69,7 @@ impl Expecter {
         });
         // allocate string with a initial capacity of 1024, so when appending chars
         // we don't need to reallocate memory often
-        Expecter {
+        NBReader {
             reader: rx,
             buffer: String::with_capacity(1024),
             eof: false,
@@ -93,32 +94,55 @@ impl Expecter {
     /// read one line (blocking!) and return line including newline (\r\n for tty processes)
     /// TODO: example on how to check for EOF
     pub fn read_line(&mut self) -> Result<String> {
-        return self.expect(&ReadUntil::String('\n'.to_string()))
+        return self.read_until(&ReadUntil::String('\n'.to_string()))
     }
 
-    /// Read until needle is found (blocking!) and return string until needle
+    /// Read until needle is found (blocking!) and return string until end of needle
     ///
-    /// # Example
+    /// This methods loops (while reading from the Cursor) until the needle is found.
+    ///
+    /// There are different modes:
+    ///
+    /// - `ReadUntil::String` searches for String and returns the read bytes until and with the needle
+    ///   (use '\n'.to_string() to search for newline)
+    /// - `ReadUntil::Regex` searches for regex and returns string until and with the found chars
+    ///   which match the regex
+    /// - `ReadUntil::NBytes` reads maximum n bytes
+    /// - `ReadUntil::EOF` reads until end of file is reached
+    ///
+    /// Note that when used with a tty the lines end with \r\n
+    ///
+    /// Returns error if EOF is reached before the needle could be found.
+    ///
+    /// # Example with line reading, byte reading, regex and EOF reading.
     ///
     /// ```
     /// # use std::io::Cursor;
-    /// use rexpect::reader::{Expecter, ReadUntil};
+    /// use rexpect::reader::{NBReader, ReadUntil, Regex};
     /// // instead of a Cursor you would put your process output or file here
     /// let f = Cursor::new("Hello, miss!\n\
-    ///                         What do you mean: 'miss'?\n\
-    ///                         Oh, sorry, I have a cold");
-    /// let mut e = Expecter::new(f);
-    /// let first_line = e.expect(&ReadUntil::String('\n'.to_string())).unwrap();
+    ///                         What do you mean: 'miss'?");
+    /// let mut e = NBReader::new(f);
+    ///
+    /// let first_line = e.read_until(&ReadUntil::String('\n'.to_string())).unwrap();
     /// assert_eq!("Hello, miss!\n", &first_line);
-    /// let two_bytes = e.expect(&ReadUntil::NBytes(2)).unwrap();
+    ///
+    /// let two_bytes = e.read_until(&ReadUntil::NBytes(2)).unwrap();
     /// assert_eq!("Wh", &two_bytes);
+    /// let re = Regex::new(r"'[a-z]+'").unwrap(); // will find 'miss'
+    ///
+    /// let until_miss = e.read_until(&ReadUntil::Regex(re)).unwrap();
+    /// assert_eq!("at do you mean: 'miss'", &until_miss);
+    ///
+    /// let until_end = e.read_until(&ReadUntil::EOF).unwrap();
+    /// assert_eq!("?", &until_end);
     /// ```
     ///
-    pub fn expect(&mut self, needle: &ReadUntil) -> Result<String> {
+    pub fn read_until(&mut self, needle: &ReadUntil) -> Result<String> {
         loop {
             self.read_into_buffer()?;
-            let pos = match needle {
-                &ReadUntil::String(ref s) => self.buffer.find(s),
+            let offset = match needle {
+                &ReadUntil::String(ref s) => self.buffer.find(s).and_then(|pos| Some(pos + s.len())),
                 &ReadUntil::Regex(ref r) => {
                     if let Some(mat) = r.find(&self.buffer) {
                         Some(mat.end())
@@ -136,18 +160,17 @@ impl Expecter {
                 &ReadUntil::NBytes(n) => {
                     if n <= self.buffer.len() {
                         Some(n)
+                    } else if self.eof && self.buffer.len() > 0 {
+                        // reached almost end of buffer, return string, even though it will be
+                        // smaller than the wished n bytes
+                        Some(self.buffer.len())
                     } else {
                         None
                     }
                 }
             };
-            if let Some(pos) = pos {
-                let ret = if pos == self.buffer.len() {
-                    self.buffer.drain(..).collect()
-                } else {
-                    self.buffer.drain(..pos + 1).collect()
-                };
-                return Ok(ret);
+            if let Some(offset) = offset {
+                return Ok(self.buffer.drain(..offset).collect());
             } else if self.eof {
                 // reached end of stream and didn't match -> error
                 return Err(ErrorKind::EOF.into());
@@ -163,7 +186,7 @@ mod tests {
     #[test]
     fn test_expect_melon() {
         let f = io::Cursor::new("a melon\r\n");
-        let mut r = Expecter::new(f);
+        let mut r = NBReader::new(f);
         assert_eq!("a melon\r\n", r.read_line().expect("cannot read line"));
         // check for EOF
         match r.read_line() {
@@ -176,10 +199,19 @@ mod tests {
     #[test]
     fn test_regex() {
         let f = io::Cursor::new("2014-03-15");
-        let mut r = Expecter::new(f);
-        let re = regex::Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
-        r.expect(&ReadUntil::Regex(re))
+        let mut r = NBReader::new(f);
+        let re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
+        r.read_until(&ReadUntil::Regex(re))
             .expect("regex doesn't match");
+    }
+
+    #[test]
+    fn test_nbytes() {
+        let f = io::Cursor::new("abcdef");
+        let mut r = NBReader::new(f);
+        assert_eq!("ab", r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes"));
+        assert_eq!("cde", r.read_until(&ReadUntil::NBytes(3)).expect("3 bytes"));
+        assert_eq!("f", r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes"));
     }
 
 }

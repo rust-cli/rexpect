@@ -1,7 +1,7 @@
 //! Main module of rexpect: start new process and interact with it
 
 use process::PtyProcess;
-use reader::Expecter;
+use reader::NBReader;
 use std::io::LineWriter;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -15,7 +15,7 @@ use errors::*; // load error-chain
 pub struct PtySession {
     process: PtyProcess,
     writer: LineWriter<File>,
-    reader: Expecter,
+    reader: NBReader,
     commandname: String, // only for debugging purposes now
 }
 
@@ -81,7 +81,7 @@ pub fn spawn<S: AsRef<OsStr>>(program: S) -> Result<PtySession> {
         .chain_err(|| "couldn't start process")?;
     let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
     let writer = LineWriter::new(f.try_clone().chain_err(|| "couldn't open write stream")?);
-    let reader = Expecter::new(f);
+    let reader = NBReader::new(f);
     Ok(PtySession {
            process: process,
            writer: writer,
