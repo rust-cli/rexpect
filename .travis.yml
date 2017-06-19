@@ -1,5 +1,5 @@
 language: rust
-sudo: false
+sudo: required
 
 rust:
   - nightly
@@ -7,7 +7,9 @@ rust:
   - stable
 
 before_script:
-  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+  - pip install 'travis-cargo<0.2' --user
+  - export PATH=$HOME/.local/bin:$PATH
+
 
 os:
   - linux
