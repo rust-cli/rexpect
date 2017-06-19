@@ -239,5 +239,6 @@ mod tests {
             Ok(())
         }()
                 .expect("could not execute cat");
+        println!("11");
     }
 }
