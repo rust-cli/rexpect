@@ -204,28 +204,38 @@ mod tests {
     fn test_cat() {
         // wrapping into closure so I can use ?
         || -> Result<()> {
+            println!("cat: 1");
             let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
+            println!("cat: 2");
             let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
+            println!("cat: 3");
             let mut writer = LineWriter::new(&f);
             let mut reader = BufReader::new(&f);
+            println!("cat: 4");
             writer.write(b"hello cat\n")?;
             let mut output = String::new();
+            println!("cat: 5");
             reader.read_line(&mut output)?; // read back what we just wrote
             reader.read_line(&mut output)?; // read back output of cat
+            println!("cat: 6");
             writer.write(&[3])?;
             writer.flush()?;
 
+            println!("cat: 7");
             let mut buf = [0; 2];
             reader.read(&mut buf)?;
+            println!("cat: 8");
             output += &String::from_utf8_lossy(&buf).to_string();
 
             assert_eq!(output,
                        "hello cat\r\n\
         hello cat\r\n\
         ^C");
+            println!("cat: 9");
             let should =
                 wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
             assert_eq!(should, wait::waitpid(process.child_pid, None).unwrap());
+            println!("cat: 10");
             Ok(())
         }()
                 .expect("could not execute cat");
