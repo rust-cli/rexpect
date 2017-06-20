@@ -39,7 +39,7 @@ use errors::*; // load error-chain
 ///
 /// # fn main() {
 ///
-/// let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
+/// let mut process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
 /// let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
 /// let mut writer = LineWriter::new(&f);
 /// let mut reader = BufReader::new(&f);
@@ -54,6 +54,7 @@ use errors::*; // load error-chain
 pub struct PtyProcess {
     pub pty: PtyMaster,
     pub child_pid: i32,
+    exit_status: Option<wait::WaitStatus>,
 }
 
 
@@ -114,6 +115,7 @@ impl PtyProcess {
                     Ok(PtyProcess {
                            pty: master_fd,
                            child_pid: child_pid,
+                           exit_status: None,
                        })
                 }
             }
@@ -123,8 +125,8 @@ impl PtyProcess {
 
     /// Get status of child process, nonblocking.
     ///
-    /// Caution: if the process already died (e.g. because you called `exit()`) this
-    /// method will return an Error.
+    /// If you called exit() before, this exit status is returned.
+    /// If the process died as of itself, this method will return an Error.
     ///
     /// # Example
     /// ```rust,no_run
@@ -144,6 +146,10 @@ impl PtyProcess {
     /// ```
     ///
     pub fn status(&self) -> Result<(wait::WaitStatus)> {
+        // if exit() was called before -> return the last status of the process
+        if let Some(status) = self.exit_status {
+            return Ok(status)
+        }
         wait::waitpid(self.child_pid, Some(wait::WNOHANG)).chain_err(|| "cannot read status")
     }
 
@@ -154,7 +160,7 @@ impl PtyProcess {
     }
 
     /// regularly exit the process, this method is blocking until the process is dead
-    pub fn exit(&self) -> Result<wait::WaitStatus> {
+    pub fn exit(&mut self) -> Result<wait::WaitStatus> {
         self.kill(signal::SIGTERM)
     }
 
@@ -165,11 +171,12 @@ impl PtyProcess {
     ///
     /// TODO: we need a method `signal` which doesn't wait for termination
     /// TODO: this needs some way of timeout before we send a kill -9
-    pub fn kill(&self, sig: signal::Signal) -> Result<wait::WaitStatus> {
+    pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus> {
         signal::kill(self.child_pid, sig)
             .chain_err(|| "failed to exit process")?;
         while let Ok(status) = self.status() {
             if status != wait::WaitStatus::StillAlive {
+                self.exit_status = Some(status);
                 return Ok(status);
             }
             // TODO: should support a timeout
