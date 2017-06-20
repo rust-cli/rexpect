@@ -54,7 +54,6 @@ use errors::*; // load error-chain
 pub struct PtyProcess {
     pub pty: PtyMaster,
     pub child_pid: i32,
-    exit_status: Option<wait::WaitStatus>,
 }
 
 
@@ -115,7 +114,6 @@ impl PtyProcess {
                     Ok(PtyProcess {
                            pty: master_fd,
                            child_pid: child_pid,
-                           exit_status: None,
                        })
                 }
             }
@@ -146,11 +144,12 @@ impl PtyProcess {
     /// # }
     /// ```
     ///
-    pub fn status(&self) -> Result<(wait::WaitStatus)> {
-        if let Some(exit_status) = self.exit_status {
-            return Ok(exit_status);
+    pub fn status(&self) -> Option<(wait::WaitStatus)> {
+        if let Ok(status) = wait::waitpid(self.child_pid, Some(wait::WNOHANG)) {
+            Some(status)
+        } else {
+            None
         }
-        wait::waitpid(self.child_pid, Some(wait::WNOHANG)).chain_err(|| "cannot read status")
     }
 
     /// Wait until process has exited. This is a blocking call.
@@ -174,9 +173,8 @@ impl PtyProcess {
     pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus> {
         signal::kill(self.child_pid, sig)
             .chain_err(|| "failed to exit process")?;
-        while let Ok(status) = self.status() {
+        while let Some(status) = self.status() {
             if status != wait::WaitStatus::StillAlive {
-                self.exit_status = Some(status);
                 return Ok(status);
             }
             // TODO: should support a timeout
@@ -189,7 +187,7 @@ impl PtyProcess {
 impl Drop for PtyProcess {
     fn drop(&mut self) {
         match self.status() {
-            Ok(wait::WaitStatus::StillAlive) => {
+            Some(wait::WaitStatus::StillAlive) => {
                 self.exit().expect("cannot exit");
             }
             _ => {}
@@ -211,41 +209,30 @@ mod tests {
     fn test_cat() {
         // wrapping into closure so I can use ?
         || -> Result<()> {
-            println!("cat: 1");
             let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
-            println!("cat: 2");
             let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
-            println!("cat: 3");
             let mut writer = LineWriter::new(&f);
             let mut reader = BufReader::new(&f);
-            println!("cat: 4");
             writer.write(b"hello cat\n")?;
             let mut output = String::new();
-            println!("cat: 5");
             reader.read_line(&mut output)?; // read back what we just wrote
             reader.read_line(&mut output)?; // read back output of cat
-            println!("cat: 6");
             writer.write(&[3])?;
             writer.flush()?;
 
-            println!("cat: 7");
             let mut buf = [0; 2];
             reader.read(&mut buf)?;
-            println!("cat: 8");
             output += &String::from_utf8_lossy(&buf).to_string();
 
             assert_eq!(output,
                        "hello cat\r\n\
         hello cat\r\n\
         ^C");
-            println!("cat: 9");
             let should =
                 wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
             assert_eq!(should, wait::waitpid(process.child_pid, None).unwrap());
-            println!("cat: 10");
             Ok(())
         }()
                 .expect("could not execute cat");
-        println!("11");
     }
 }

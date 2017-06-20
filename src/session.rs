@@ -30,7 +30,7 @@ pub struct PtySession {
 ///
 /// # fn main() {
 ///     # || -> Result<()> {
-/// let mut s = spawn("cat")?;
+/// let mut s = spawn("cat", None)?;
 /// s.send_line("hello, polly!")?;
 /// let line = s.read_line()?;
 /// assert_eq!("hello, polly!\r\n", line);
@@ -74,14 +74,14 @@ impl PtySession {
     }
 }
 
-pub fn spawn<S: AsRef<OsStr>>(program: S) -> Result<PtySession> {
+pub fn spawn<S: AsRef<OsStr>>(program: S, timeout: Option<u16>) -> Result<PtySession> {
     let command = Command::new(program);
     let commandname = format!("{:?}", &command);
     let process = PtyProcess::new(command)
         .chain_err(|| "couldn't start process")?;
     let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
     let writer = LineWriter::new(f.try_clone().chain_err(|| "couldn't open write stream")?);
-    let reader = NBReader::new(f);
+    let reader = NBReader::new(f, timeout);
     Ok(PtySession {
            process: process,
            writer: writer,
@@ -96,7 +96,7 @@ mod tests {
     #[test]
     fn test_cat2() {
         || -> Result<()> {
-            let mut s = spawn("cat")?;
+            let mut s = spawn("cat", None)?;
             s.send_line("hans")?;
             assert_eq!("hans\r\n", s.read_line()?);
             let should = ::process::wait::WaitStatus::Signaled(s.process.child_pid,

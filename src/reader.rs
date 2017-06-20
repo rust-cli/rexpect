@@ -38,7 +38,7 @@ pub struct NBReader {
 }
 
 impl NBReader {
-    pub fn new<R: Read + Send + 'static>(f: R) -> NBReader {
+    pub fn new<R: Read + Send + 'static>(f: R, timeout: Option<u16>) -> NBReader {
         let (tx, rx) = channel();
 
         // spawn a thread which reads one char and sends it to tx
@@ -122,7 +122,7 @@ impl NBReader {
     /// // instead of a Cursor you would put your process output or file here
     /// let f = Cursor::new("Hello, miss!\n\
     ///                         What do you mean: 'miss'?");
-    /// let mut e = NBReader::new(f);
+    /// let mut e = NBReader::new(f, None);
     ///
     /// let first_line = e.read_until(&ReadUntil::String('\n'.to_string())).unwrap();
     /// assert_eq!("Hello, miss!\n", &first_line);
@@ -186,7 +186,7 @@ mod tests {
     #[test]
     fn test_expect_melon() {
         let f = io::Cursor::new("a melon\r\n");
-        let mut r = NBReader::new(f);
+        let mut r = NBReader::new(f, None);
         assert_eq!("a melon\r\n", r.read_line().expect("cannot read line"));
         // check for EOF
         match r.read_line() {
@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn test_regex() {
         let f = io::Cursor::new("2014-03-15");
-        let mut r = NBReader::new(f);
+        let mut r = NBReader::new(f, None);
         let re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
         r.read_until(&ReadUntil::Regex(re))
             .expect("regex doesn't match");
@@ -208,10 +208,15 @@ mod tests {
     #[test]
     fn test_nbytes() {
         let f = io::Cursor::new("abcdef");
-        let mut r = NBReader::new(f);
+        let mut r = NBReader::new(f, None);
         assert_eq!("ab", r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes"));
         assert_eq!("cde", r.read_until(&ReadUntil::NBytes(3)).expect("3 bytes"));
         assert_eq!("f", r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes"));
+    }
+
+    #[test]
+    fn test_timeout() {
+
     }
 
 }
