@@ -54,7 +54,6 @@ use errors::*; // load error-chain
 pub struct PtyProcess {
     pub pty: PtyMaster,
     pub child_pid: i32,
-    exit_status: Option<wait::WaitStatus>,
 }
 
 
@@ -115,7 +114,6 @@ impl PtyProcess {
                     Ok(PtyProcess {
                            pty: master_fd,
                            child_pid: child_pid,
-                           exit_status: None,
                        })
                 }
             }
@@ -125,8 +123,9 @@ impl PtyProcess {
 
     /// Get status of child process, nonblocking.
     ///
-    /// If you called exit() before, this exit status is returned.
-    /// If the process died as of itself, this method will return an Error.
+    /// This method runs waitpid on the process.
+    /// This means: If you ran `exit()` before or `status()` tihs method will
+    /// return an Error
     ///
     /// # Example
     /// ```rust,no_run
@@ -146,10 +145,6 @@ impl PtyProcess {
     /// ```
     ///
     pub fn status(&self) -> Result<(wait::WaitStatus)> {
-        // if exit() was called before -> return the last status of the process
-        if let Some(status) = self.exit_status {
-            return Ok(status)
-        }
         wait::waitpid(self.child_pid, Some(wait::WNOHANG)).chain_err(|| "cannot read status")
     }
 
@@ -176,7 +171,6 @@ impl PtyProcess {
             .chain_err(|| "failed to exit process")?;
         while let Ok(status) = self.status() {
             if status != wait::WaitStatus::StillAlive {
-                self.exit_status = Some(status);
                 return Ok(status);
             }
             // TODO: should support a timeout
