@@ -10,6 +10,12 @@ before_script:
   - pip install 'travis-cargo<0.2' --user
   - export PATH=$HOME/.local/bin:$PATH
 
+# Only while the returning Err() in drop() causes OSX on Travis
+# to kill the process with -9 (or whatever..)
+matrix:
+  allow_failures:
+    - rust: nightly
+    - os: osx
 
 os:
   - linux
