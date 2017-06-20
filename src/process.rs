@@ -54,6 +54,7 @@ use errors::*; // load error-chain
 pub struct PtyProcess {
     pub pty: PtyMaster,
     pub child_pid: i32,
+    exit_status: Option<wait::WaitStatus>,
 }
 
 
@@ -114,6 +115,7 @@ impl PtyProcess {
                     Ok(PtyProcess {
                            pty: master_fd,
                            child_pid: child_pid,
+                           exit_status: None,
                        })
                 }
             }
@@ -145,6 +147,9 @@ impl PtyProcess {
     /// ```
     ///
     pub fn status(&self) -> Result<(wait::WaitStatus)> {
+        if let Some(exit_status) = self.exit_status {
+            return Ok(exit_status);
+        }
         wait::waitpid(self.child_pid, Some(wait::WNOHANG)).chain_err(|| "cannot read status")
     }
 
@@ -171,6 +176,7 @@ impl PtyProcess {
             .chain_err(|| "failed to exit process")?;
         while let Ok(status) = self.status() {
             if status != wait::WaitStatus::StillAlive {
+                self.exit_status = Some(status);
                 return Ok(status);
             }
             // TODO: should support a timeout
