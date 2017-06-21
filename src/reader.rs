@@ -94,7 +94,7 @@ impl NBReader {
     /// read one line (blocking!) and return line including newline (\r\n for tty processes)
     /// TODO: example on how to check for EOF
     pub fn read_line(&mut self) -> Result<String> {
-        return self.read_until(&ReadUntil::String('\n'.to_string()))
+        return self.read_until(&ReadUntil::String('\n'.to_string()));
     }
 
     /// Read until needle is found (blocking!) and return string until end of needle
@@ -103,8 +103,8 @@ impl NBReader {
     ///
     /// There are different modes:
     ///
-    /// - `ReadUntil::String` searches for String and returns the read bytes until and with the needle
-    ///   (use '\n'.to_string() to search for newline)
+    /// - `ReadUntil::String` searches for String and returns the read bytes
+    ///    until and with the needle (use '\n'.to_string() to search for newline)
     /// - `ReadUntil::Regex` searches for regex and returns string until and with the found chars
     ///   which match the regex
     /// - `ReadUntil::NBytes` reads maximum n bytes
@@ -142,7 +142,9 @@ impl NBReader {
         loop {
             self.read_into_buffer()?;
             let offset = match needle {
-                &ReadUntil::String(ref s) => self.buffer.find(s).and_then(|pos| Some(pos + s.len())),
+                &ReadUntil::String(ref s) => {
+                    self.buffer.find(s).and_then(|pos| Some(pos + s.len()))
+                }
                 &ReadUntil::Regex(ref r) => {
                     if let Some(mat) = r.find(&self.buffer) {
                         Some(mat.end())
@@ -156,7 +158,7 @@ impl NBReader {
                     } else {
                         None
                     }
-                },
+                }
                 &ReadUntil::NBytes(n) => {
                     if n <= self.buffer.len() {
                         Some(n)
@@ -215,8 +217,6 @@ mod tests {
     }
 
     #[test]
-    fn test_timeout() {
-
-    }
+    fn test_timeout() {}
 
 }
