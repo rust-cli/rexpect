@@ -1,9 +1,8 @@
 //! Main module of rexpect: start new process and interact with it
 
 use process::PtyProcess;
-use reader::NBReader;
+use reader::{NBReader, ReadUntil};
 use std::io::LineWriter;
-use std::ffi::OsStr;
 use std::fs::File;
 use std::process::Command;
 use std::os::unix::io::{FromRawFd, AsRawFd};
@@ -49,6 +48,7 @@ impl PtySession {
         len += self.writer
             .write(&['\n' as u8])
             .chain_err(|| "cannot write newline")?;
+        self.read_line()?; // discard what we just wrote into the tty
         Ok(len)
     }
 
@@ -72,10 +72,33 @@ impl PtySession {
     pub fn read_line(&mut self) -> Result<String> {
         self.reader.read_line()
     }
+
+    pub fn exp_eof(&mut self) -> Result<()> {
+        self.reader.read_until(&ReadUntil::EOF).and_then(|_| Ok(()))
+    }
+
+    pub fn exp_string(&mut self, needle:&str) -> Result<()> {
+        self.reader.read_until(&ReadUntil::String(needle.to_string())).and_then(|output| {
+            println!("{}", output);
+            Ok(())
+        })
+    }
 }
 
-pub fn spawn<S: AsRef<OsStr>>(program: S, timeout: Option<u16>) -> Result<PtySession> {
-    let command = Command::new(program);
+/// Start command in a pty session. Splits string at space and handles the rest as args
+pub fn spawn(program: &str, timeout: Option<u16>) -> Result<PtySession> {
+    let command = if program.find(" ").is_some() {
+        let mut parts = program.split(" ");
+        let mut cmd = Command::new(parts.next().unwrap());
+        cmd.args(parts);
+        cmd
+    } else {
+        Command::new(program)
+    };
+    spawn_command(command, timeout)
+}
+
+pub fn spawn_command(command: Command, timeout: Option<u16>) -> Result<PtySession> {
     let commandname = format!("{:?}", &command);
     let process = PtyProcess::new(command)
         .chain_err(|| "couldn't start process")?;
@@ -106,6 +129,30 @@ mod tests {
             Ok(())
         }()
                 .expect("could not execute");
+    }
+
+
+    #[test]
+    fn test_timeout() {
+        || -> Result<()> {
+            let mut p = spawn("bash", Some(1)).expect("cannot run sleep");
+            p.send_line("sleep 1 && echo done")?;
+            p.exp_string("done")?;
+            Ok(())
+        }().expect("test_timeout failed");
+    }
+
+    #[test]
+    fn test_cat3() {
+
+        || -> Result<()> {
+            let mut p = spawn("cat", Some(1)).expect("cannot run cat");
+            p.send_line("hello world!")?;
+            p.exp_string("hello world!")?;
+            p.send_line("hello heaven!")?;
+            p.exp_string("hello heaven!")?;
+            Ok(())
+        }().expect("test_cat3 failed");
     }
 
 }

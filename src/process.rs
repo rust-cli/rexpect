@@ -165,20 +165,20 @@ impl PtyProcess {
 
     /// kills the process with a specific signal. This method blocks, until the process is dead
     ///
-    /// sends SIGTERM to the process, the pty session is closed upon dropping PtyMaster,
-    /// so we don't need to explicitely do that
+    /// repeatedly sends SIGTERM to the process until it died,
+    /// the pty session is closed upon dropping PtyMaster,
+    /// so we don't need to explicitely do that here.
     ///
     /// TODO: we need a method `signal` which doesn't wait for termination
     /// TODO: this needs some way of timeout before we send a kill -9
     pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus> {
-        signal::kill(self.child_pid, sig)
-            .chain_err(|| "failed to exit process")?;
         while let Some(status) = self.status() {
             if status != wait::WaitStatus::StillAlive {
                 return Ok(status);
             }
-            // TODO: should support a timeout
             thread::sleep(time::Duration::from_millis(100));
+            signal::kill(self.child_pid, sig)
+                .chain_err(|| "failed to exit process")?;
         }
         Err("cannot read status, maybe it was already killed..".into())
     }

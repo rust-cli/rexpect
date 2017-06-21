@@ -215,8 +215,4 @@ mod tests {
         assert_eq!("cde", r.read_until(&ReadUntil::NBytes(3)).expect("3 bytes"));
         assert_eq!("f", r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes"));
     }
-
-    #[test]
-    fn test_timeout() {}
-
 }
