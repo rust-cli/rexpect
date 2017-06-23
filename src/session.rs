@@ -147,15 +147,8 @@ mod tests {
 
     #[test]
     fn test_timeout2() {
-        || -> Result<()> {
-            let mut p = spawn("sleep 1", Some(1100)).expect("cannot run sleep 1");
-            match p.exp_eof() {
-                Ok(_) => assert!(false, "should raise PipeError"),
-                Err(Error (ErrorKind::BrokenPipe, _)) => {},
-                Err(_) => assert!(false, "should raise PipeError"),
-        }
-        Ok(())
-    }().expect("test_timeout2 failed");
+        let mut p = spawn("sleep 1", Some(1100)).expect("cannot run sleep 1");
+        assert!(p.exp_eof().is_ok(), "expected eof");
     }
 
     #[test]

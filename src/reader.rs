@@ -96,8 +96,9 @@ impl NBReader {
                 Ok(PipedChar::Char(c)) => self.buffer.push(c as char),
                 Ok(PipedChar::EOF) => self.eof = true,
                 // this is just from experience, e.g. "sleep 5" returns the other error which
-                // most probably means that there is no stdout stream at all
-                Err(PipeError::IO ( ref err ) ) if err.kind() == io::ErrorKind::Other => return Err(ErrorKind::BrokenPipe.into()),
+                // most probably means that there is no stdout stream at all -> send EOF
+                // this only happens on Linux, not on OSX
+                Err(PipeError::IO ( ref err ) ) if err.kind() == io::ErrorKind::Other => self.eof = true,
                 // discard other errors
                 Err(_) => {}
             }
