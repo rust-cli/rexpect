@@ -1,7 +1,9 @@
+
 use std::io::{self, BufReader};
 use std::io::prelude::*;
 use std::sync::mpsc::{channel, Receiver};
 use std::{thread, result};
+use std::time;
 use errors::*; // load error-chain
 pub use regex::Regex;
 
@@ -35,10 +37,17 @@ pub struct NBReader {
     reader: Receiver<result::Result<PipedChar, PipeError>>,
     buffer: String,
     eof: bool,
+    timeout: Option<time::Duration>,
 }
 
 impl NBReader {
-    pub fn new<R: Read + Send + 'static>(f: R, timeout: Option<u16>) -> NBReader {
+    /// Create a new reader instance
+    ///
+    /// f: file like object
+    /// timeout:
+    /// - None: read_until is blocking forever. This is probably not what you want
+    /// - Some(millis): after millis millisecons a timeout error is raised
+    pub fn new<R: Read + Send + 'static>(f: R, timeout: Option<u64>) -> NBReader {
         let (tx, rx) = channel();
 
         // spawn a thread which reads one char and sends it to tx
@@ -73,6 +82,7 @@ impl NBReader {
             reader: rx,
             buffer: String::with_capacity(1024),
             eof: false,
+            timeout: timeout.and_then(|millis| Some(time::Duration::from_millis(millis))),
         }
     }
 
@@ -85,7 +95,11 @@ impl NBReader {
             match from_channel {
                 Ok(PipedChar::Char(c)) => self.buffer.push(c as char),
                 Ok(PipedChar::EOF) => self.eof = true,
-                Err(_) => return Err("cannot read from channel".into()),
+                // this is just from experience, e.g. "sleep 5" returns the other error which
+                // most probably means that there is no stdout stream at all
+                Err(PipeError::IO { 0: ref e } ) if e.kind() == io::ErrorKind::Other => return Err(ErrorKind::BrokenPipe.into()),
+                // discard other errors
+                Err(_) => {}
             }
         }
         Ok(())
@@ -139,6 +153,7 @@ impl NBReader {
     /// ```
     ///
     pub fn read_until(&mut self, needle: &ReadUntil) -> Result<String> {
+        let start = time::Instant::now();
         loop {
             self.read_into_buffer()?;
             let offset = match needle {
@@ -177,6 +192,14 @@ impl NBReader {
                 // reached end of stream and didn't match -> error
                 return Err(ErrorKind::EOF.into());
             }
+
+            if let Some(timeout) = self.timeout {
+                if start.elapsed() > timeout {
+                    return Err(ErrorKind::Timeout.into());
+                }
+            }
+            // nothing matched: wait a little
+            thread::sleep(time::Duration::from_millis(100));
         }
     }
 }

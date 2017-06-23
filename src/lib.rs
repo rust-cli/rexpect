@@ -1,3 +1,5 @@
+#![feature(relaxed_adts)]
+
 extern crate nix;
 extern crate regex;
 
@@ -15,8 +17,16 @@ pub mod errors {
     error_chain!{
         errors {
             EOF {
-                description("An error occurred during startup")
-                display("Startup aborted: did not complete successfully")
+                description("End of filestream (usually stdout) occurred, most probably because the process terminated")
+                display("EOF (End of File)")
+            }
+            BrokenPipe {
+                description("The pipe to the process is broken. Most probably because the process died.")
+                display("PipeError")
+            }
+            Timeout {
+                description("The process didn't end within the given timeout")
+                display("Timeout Error")
             }
         }
     }

@@ -78,15 +78,14 @@ impl PtySession {
     }
 
     pub fn exp_string(&mut self, needle:&str) -> Result<()> {
-        self.reader.read_until(&ReadUntil::String(needle.to_string())).and_then(|output| {
-            println!("{}", output);
+        self.reader.read_until(&ReadUntil::String(needle.to_string())).and_then(|_| {
             Ok(())
         })
     }
 }
 
 /// Start command in a pty session. Splits string at space and handles the rest as args
-pub fn spawn(program: &str, timeout: Option<u16>) -> Result<PtySession> {
+pub fn spawn(program: &str, timeout: Option<u64>) -> Result<PtySession> {
     let command = if program.find(" ").is_some() {
         let mut parts = program.split(" ");
         let mut cmd = Command::new(parts.next().unwrap());
@@ -98,7 +97,7 @@ pub fn spawn(program: &str, timeout: Option<u16>) -> Result<PtySession> {
     spawn_command(command, timeout)
 }
 
-pub fn spawn_command(command: Command, timeout: Option<u16>) -> Result<PtySession> {
+pub fn spawn_command(command: Command, timeout: Option<u64>) -> Result<PtySession> {
     let commandname = format!("{:?}", &command);
     let process = PtyProcess::new(command)
         .chain_err(|| "couldn't start process")?;
@@ -135,11 +134,28 @@ mod tests {
     #[test]
     fn test_timeout() {
         || -> Result<()> {
-            let mut p = spawn("bash", Some(1)).expect("cannot run sleep");
-            p.send_line("sleep 1 && echo done")?;
-            p.exp_string("done")?;
+            let mut p = spawn("sleep 3", Some(1000)).expect("cannot run sleep 3");
+            match p.exp_eof() {
+                Ok(_) => assert!(false, "should raise Timeout"),
+                Err(Error { 0: ErrorKind::Timeout, .. }) => {},
+                Err(_) => assert!(false, "should raise TimeOut")
+
+            }
             Ok(())
         }().expect("test_timeout failed");
+    }
+
+    #[test]
+    fn test_timeout2() {
+        || -> Result<()> {
+            let mut p = spawn("sleep 1", Some(1100)).expect("cannot run sleep 1");
+            match p.exp_eof() {
+                Ok(_) => assert!(false, "should raise PipeError"),
+                Err(Error { 0: ErrorKind::BrokenPipe, .. }) => {},
+                Err(_) => assert!(false, "should raise PipeError"),
+        }
+        Ok(())
+    }().expect("test_timeout2 failed");
     }
 
     #[test]
