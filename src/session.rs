@@ -137,7 +137,7 @@ mod tests {
             let mut p = spawn("sleep 3", Some(1000)).expect("cannot run sleep 3");
             match p.exp_eof() {
                 Ok(_) => assert!(false, "should raise Timeout"),
-                Err(Error { 0: ErrorKind::Timeout, .. }) => {},
+                Err(Error (ErrorKind::Timeout, _)) => {},
                 Err(_) => assert!(false, "should raise TimeOut")
 
             }
@@ -151,7 +151,7 @@ mod tests {
             let mut p = spawn("sleep 1", Some(1100)).expect("cannot run sleep 1");
             match p.exp_eof() {
                 Ok(_) => assert!(false, "should raise PipeError"),
-                Err(Error { 0: ErrorKind::BrokenPipe, .. }) => {},
+                Err(Error (ErrorKind::BrokenPipe, _)) => {},
                 Err(_) => assert!(false, "should raise PipeError"),
         }
         Ok(())

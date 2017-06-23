@@ -1,5 +1,3 @@
-#![feature(relaxed_adts)]
-
 extern crate nix;
 extern crate regex;
 

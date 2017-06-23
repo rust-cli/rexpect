@@ -97,7 +97,7 @@ impl NBReader {
                 Ok(PipedChar::EOF) => self.eof = true,
                 // this is just from experience, e.g. "sleep 5" returns the other error which
                 // most probably means that there is no stdout stream at all
-                Err(PipeError::IO { 0: ref e } ) if e.kind() == io::ErrorKind::Other => return Err(ErrorKind::BrokenPipe.into()),
+                Err(PipeError::IO ( ref err ) ) if err.kind() == io::ErrorKind::Other => return Err(ErrorKind::BrokenPipe.into()),
                 // discard other errors
                 Err(_) => {}
             }
