@@ -115,8 +115,9 @@ pub fn spawn_command(command: Command, timeout: Option<u64>) -> Result<PtySessio
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
-    fn test_cat2() {
+    fn test_read_line() {
         || -> Result<()> {
             let mut s = spawn("cat", None)?;
             s.send_line("hans")?;
@@ -132,7 +133,7 @@ mod tests {
 
 
     #[test]
-    fn test_timeout() {
+    fn test_expect_eof_timeout() {
         || -> Result<()> {
             let mut p = spawn("sleep 3", Some(1000)).expect("cannot run sleep 3");
             match p.exp_eof() {
@@ -146,13 +147,13 @@ mod tests {
     }
 
     #[test]
-    fn test_timeout2() {
+    fn test_expect_eof_timeout2() {
         let mut p = spawn("sleep 1", Some(1100)).expect("cannot run sleep 1");
         assert!(p.exp_eof().is_ok(), "expected eof");
     }
 
     #[test]
-    fn test_cat3() {
+    fn test_expect_string() {
 
         || -> Result<()> {
             let mut p = spawn("cat", Some(1)).expect("cannot run cat");

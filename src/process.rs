@@ -163,24 +163,32 @@ impl PtyProcess {
         self.kill(signal::SIGTERM)
     }
 
+    /// nonblocking variant of `kill()` (doesn't wait for process to be killed)
+    pub fn signal(&mut self, sig: signal::Signal) -> Result<()> {
+        signal::kill(self.child_pid, sig)
+            .chain_err(|| "failed to send signal to process")?;
+        Ok(())
+    }
+
     /// kills the process with a specific signal. This method blocks, until the process is dead
     ///
     /// repeatedly sends SIGTERM to the process until it died,
     /// the pty session is closed upon dropping PtyMaster,
     /// so we don't need to explicitely do that here.
     ///
-    /// TODO: we need a method `signal` which doesn't wait for termination
     /// TODO: this needs some way of timeout before we send a kill -9
     pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus> {
-        while let Some(status) = self.status() {
-            if status != wait::WaitStatus::StillAlive {
-                return Ok(status);
-            }
-            thread::sleep(time::Duration::from_millis(100));
+        loop {
             signal::kill(self.child_pid, sig)
                 .chain_err(|| "failed to exit process")?;
+
+            match self.status() {
+                Some(status) if status != wait::WaitStatus::StillAlive => {
+                    return Ok(status)
+                },
+                Some(_) | None => thread::sleep(time::Duration::from_millis(100))
+            }
         }
-        Err("cannot read status, maybe it was already killed..".into())
     }
 }
 
@@ -199,7 +207,7 @@ impl Drop for PtyProcess {
 mod tests {
     use super::*;
     use std::fs::File;
-    use std::io::{BufReader, LineWriter, Result};
+    use std::io::{BufReader, LineWriter};
     use nix::sys::{wait, signal};
     use std::os::unix::io::{FromRawFd, AsRawFd};
     use std::io::prelude::*;
@@ -208,7 +216,7 @@ mod tests {
     /// Open cat, write string, read back string twice, send Ctrl^C and check that cat exited
     fn test_cat() {
         // wrapping into closure so I can use ?
-        || -> Result<()> {
+        || -> std::io::Result<()> {
             let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
             let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
             let mut writer = LineWriter::new(&f);
@@ -225,7 +233,7 @@ mod tests {
             output += &String::from_utf8_lossy(&buf).to_string();
 
             assert_eq!(output,
-                       "hello cat\r\n\
+            "hello cat\r\n\
         hello cat\r\n\
         ^C");
             let should =
@@ -233,6 +241,6 @@ mod tests {
             assert_eq!(should, wait::waitpid(process.child_pid, None).unwrap());
             Ok(())
         }()
-                .expect("could not execute cat");
+            .expect("could not execute cat");
     }
 }
