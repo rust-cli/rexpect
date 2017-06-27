@@ -155,25 +155,38 @@ impl NBReader {
     ///
     pub fn read_until(&mut self, needle: &ReadUntil) -> Result<String> {
         let start = time::Instant::now();
+
+        fn find_string(buffer:&str, needle:&str) -> Option<usize> {
+            buffer.find(&needle).and_then(|pos| Some(pos + needle.len()))
+        }
+
+        fn find_regex(buffer:&str, pattern:&Regex) -> Option<usize> {
+            if let Some(mat) = pattern.find(buffer) {
+                Some(mat.end())
+            } else {
+                None
+            }
+        }
+
+        fn find_eof(buffer:&str, eof:bool) -> Option<usize> {
+            if eof {
+                Some(buffer.len())
+            } else {
+                None
+            }
+        }
+
         loop {
             self.read_into_buffer()?;
             let offset = match needle {
                 &ReadUntil::String(ref s) => {
-                    self.buffer.find(s).and_then(|pos| Some(pos + s.len()))
+                    find_string(&self.buffer, s)
                 }
                 &ReadUntil::Regex(ref r) => {
-                    if let Some(mat) = r.find(&self.buffer) {
-                        Some(mat.end())
-                    } else {
-                        None
-                    }
+                    find_regex(&self.buffer, r)
                 }
                 &ReadUntil::EOF => {
-                    if self.eof {
-                        Some(self.buffer.len())
-                    } else {
-                        None
-                    }
+                    find_eof(&self.buffer, self.eof)
                 }
                 &ReadUntil::NBytes(n) => {
                     if n <= self.buffer.len() {
