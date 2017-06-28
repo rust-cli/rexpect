@@ -23,6 +23,54 @@ pub enum ReadUntil {
     Regex(Regex),
     EOF,
     NBytes(usize),
+    Any(Vec<ReadUntil>),
+}
+
+/// find first occurrence of needle within buffer
+///
+/// # Arguments:
+///
+/// - buffer: the currently read buffer from a process which will still grow in the future
+/// - eof: if the process already sent an EOF or a HUP
+pub fn find(needle:&ReadUntil, buffer:&str, eof:bool) -> Option<usize> {
+    match needle {
+        &ReadUntil::String(ref s) => {
+            buffer.find(s).and_then(|pos| Some(pos + s.len()))
+        }
+        &ReadUntil::Regex(ref pattern) => {
+            if let Some(mat) = pattern.find(buffer) {
+                Some(mat.end())
+            } else {
+                None
+            }
+        }
+        &ReadUntil::EOF => {
+            if eof {
+                Some(buffer.len())
+            } else {
+                None
+            }
+        }
+        &ReadUntil::NBytes(n) => {
+            if n <= buffer.len() {
+                Some(n)
+            } else if eof && buffer.len() > 0 {
+                // reached almost end of buffer, return string, even though it will be
+                // smaller than the wished n bytes
+                Some(buffer.len())
+            } else {
+                None
+            }
+        }
+        &ReadUntil::Any(ref any) => {
+            for read_until in any {
+                if let Some(pos) = find(&read_until, buffer, eof) {
+                    return Some(pos)
+                }
+            }
+            None
+        }
+    }
 }
 
 /// Non blocking reader
@@ -156,51 +204,9 @@ impl NBReader {
     pub fn read_until(&mut self, needle: &ReadUntil) -> Result<String> {
         let start = time::Instant::now();
 
-        fn find_string(buffer:&str, needle:&str) -> Option<usize> {
-            buffer.find(&needle).and_then(|pos| Some(pos + needle.len()))
-        }
-
-        fn find_regex(buffer:&str, pattern:&Regex) -> Option<usize> {
-            if let Some(mat) = pattern.find(buffer) {
-                Some(mat.end())
-            } else {
-                None
-            }
-        }
-
-        fn find_eof(buffer:&str, eof:bool) -> Option<usize> {
-            if eof {
-                Some(buffer.len())
-            } else {
-                None
-            }
-        }
-
         loop {
             self.read_into_buffer()?;
-            let offset = match needle {
-                &ReadUntil::String(ref s) => {
-                    find_string(&self.buffer, s)
-                }
-                &ReadUntil::Regex(ref r) => {
-                    find_regex(&self.buffer, r)
-                }
-                &ReadUntil::EOF => {
-                    find_eof(&self.buffer, self.eof)
-                }
-                &ReadUntil::NBytes(n) => {
-                    if n <= self.buffer.len() {
-                        Some(n)
-                    } else if self.eof && self.buffer.len() > 0 {
-                        // reached almost end of buffer, return string, even though it will be
-                        // smaller than the wished n bytes
-                        Some(self.buffer.len())
-                    } else {
-                        None
-                    }
-                }
-            };
-            if let Some(offset) = offset {
+            if let Some(offset) = find(needle, &self.buffer, self.eof) {
                 return Ok(self.buffer.drain(..offset).collect());
             } else if self.eof {
                 // reached end of stream and didn't match -> error
