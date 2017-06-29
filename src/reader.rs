@@ -3,7 +3,7 @@ use std::io::{self, BufReader};
 use std::io::prelude::*;
 use std::sync::mpsc::{channel, Receiver};
 use std::{thread, result};
-use std::time;
+use std::{time, fmt};
 use errors::*; // load error-chain
 pub use regex::Regex;
 
@@ -24,6 +24,25 @@ pub enum ReadUntil {
     EOF,
     NBytes(usize),
     Any(Vec<ReadUntil>),
+}
+
+impl fmt::Display for ReadUntil {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let printable = match self {
+            &ReadUntil::String(ref s) => format!("\"{}\"", s),
+            &ReadUntil::Regex(ref r) => format!("Regex: \"{}\"", r),
+            &ReadUntil::EOF => "EOF (End of File)".to_string(),
+            &ReadUntil::NBytes(n) => format!("reading {} bytes", n),
+            &ReadUntil::Any(ref v) => {
+                let mut res = Vec::new();
+                for r in v {
+                    res.push(r.to_string());
+                }
+                res.join(", ")
+            }
+        };
+        write!(f, "{}", printable)
+    }
 }
 
 /// find first occurrence of needle within buffer
@@ -208,14 +227,17 @@ impl NBReader {
             self.read_into_buffer()?;
             if let Some(offset) = find(needle, &self.buffer, self.eof) {
                 return Ok(self.buffer.drain(..offset).collect());
-            } else if self.eof {
-                // reached end of stream and didn't match -> error
+            }
+
+            // reached end of stream and didn't match -> error
+            if self.eof {
                 return Err(ErrorKind::EOF.into());
             }
 
+            // ran into timeout
             if let Some(timeout) = self.timeout {
                 if start.elapsed() > timeout {
-                    return Err(ErrorKind::Timeout.into());
+                    return Err(ErrorKind::Timeout(needle.to_string(), self.buffer.clone(), timeout).into());
                 }
             }
             // nothing matched: wait a little

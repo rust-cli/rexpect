@@ -11,6 +11,7 @@ pub use session::spawn;
 extern crate error_chain;
 
 pub mod errors {
+    use std::time;
     // Create the Error, ErrorKind, ResultExt, and Result types
     error_chain!{
         errors {
@@ -22,9 +23,9 @@ pub mod errors {
                 description("The pipe to the process is broken. Most probably because the process died.")
                 display("PipeError")
             }
-            Timeout {
+            Timeout(expected:String, got:String, timeout:time::Duration) {
                 description("The process didn't end within the given timeout")
-                display("Timeout Error")
+                display("Timeout Error: Expected {} but got \"{}\" (after waiting {} ms)", expected, got, (timeout.as_secs() * 1000) as u32 + timeout.subsec_nanos() / 1_000_000)
             }
         }
     }

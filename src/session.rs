@@ -1,7 +1,8 @@
 //! Main module of rexpect: start new process and interact with it
 
 use process::PtyProcess;
-use reader::{NBReader, ReadUntil};
+use reader::NBReader;
+pub use reader::ReadUntil;
 use std::io::LineWriter;
 use std::fs::File;
 use std::process::Command;
@@ -82,6 +83,10 @@ impl PtySession {
             Ok(())
         })
     }
+
+    pub fn exp_any(&mut self, needles:Vec<ReadUntil>) -> Result<(String)> {
+        self.reader.read_until(&ReadUntil::Any(needles))
+    }
 }
 
 /// Start command in a pty session. Splits string at space and handles the rest as args
@@ -154,7 +159,6 @@ mod tests {
 
     #[test]
     fn test_expect_string() {
-
         || -> Result<()> {
             let mut p = spawn("cat", Some(1)).expect("cannot run cat");
             p.send_line("hello world!")?;
@@ -165,4 +169,16 @@ mod tests {
         }().expect("test_cat3 failed");
     }
 
+    #[test]
+    fn test_expect_any() {
+        || -> Result<()> {
+            let mut p = spawn("cat", None).expect("cannot run cat");
+            p.send_line("Hi")?;
+            match p.exp_any(vec![ReadUntil::NBytes(3), ReadUntil::String("Hi".to_string())]) {
+                Ok(s) => assert_eq!("Hi\r", s),
+                Err(e) => assert!(false, format!("got error: {}", e))
+            }
+            Ok(())
+        }().expect("test_expect_any failed");
+    }
 }
