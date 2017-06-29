@@ -29,7 +29,8 @@ pub enum ReadUntil {
 impl fmt::Display for ReadUntil {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let printable = match self {
-            &ReadUntil::String(ref s) => format!("\"{}\"", s),
+            &ReadUntil::String(ref s) if s == "\n" => { "\\n (newline)".to_string()},
+            &ReadUntil::String(ref s) => { format!("\"{}\"", s)},
             &ReadUntil::Regex(ref r) => format!("Regex: \"{}\"", r),
             &ReadUntil::EOF => "EOF (End of File)".to_string(),
             &ReadUntil::NBytes(n) => format!("reading {} bytes", n),
@@ -51,11 +52,9 @@ impl fmt::Display for ReadUntil {
 ///
 /// - buffer: the currently read buffer from a process which will still grow in the future
 /// - eof: if the process already sent an EOF or a HUP
-pub fn find(needle:&ReadUntil, buffer:&str, eof:bool) -> Option<usize> {
+pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<usize> {
     match needle {
-        &ReadUntil::String(ref s) => {
-            buffer.find(s).and_then(|pos| Some(pos + s.len()))
-        }
+        &ReadUntil::String(ref s) => buffer.find(s).and_then(|pos| Some(pos + s.len())),
         &ReadUntil::Regex(ref pattern) => {
             if let Some(mat) = pattern.find(buffer) {
                 Some(mat.end())
@@ -63,13 +62,7 @@ pub fn find(needle:&ReadUntil, buffer:&str, eof:bool) -> Option<usize> {
                 None
             }
         }
-        &ReadUntil::EOF => {
-            if eof {
-                Some(buffer.len())
-            } else {
-                None
-            }
-        }
+        &ReadUntil::EOF => if eof { Some(buffer.len()) } else { None },
         &ReadUntil::NBytes(n) => {
             if n <= buffer.len() {
                 Some(n)
@@ -84,7 +77,7 @@ pub fn find(needle:&ReadUntil, buffer:&str, eof:bool) -> Option<usize> {
         &ReadUntil::Any(ref any) => {
             for read_until in any {
                 if let Some(pos) = find(&read_until, buffer, eof) {
-                    return Some(pos)
+                    return Some(pos);
                 }
             }
             None
@@ -165,7 +158,9 @@ impl NBReader {
                 // this is just from experience, e.g. "sleep 5" returns the other error which
                 // most probably means that there is no stdout stream at all -> send EOF
                 // this only happens on Linux, not on OSX
-                Err(PipeError::IO ( ref err ) ) if err.kind() == io::ErrorKind::Other => self.eof = true,
+                Err(PipeError::IO(ref err)) if err.kind() == io::ErrorKind::Other => {
+                    self.eof = true
+                }
                 // discard other errors
                 Err(_) => {}
             }
@@ -230,14 +225,19 @@ impl NBReader {
             }
 
             // reached end of stream and didn't match -> error
+            // we don't know the reason of eof yet, so we provide an empty string
+            // this will be filled out in session::exp()
             if self.eof {
-                return Err(ErrorKind::EOF.into());
+                return Err(ErrorKind::EOF(needle.to_string(), self.buffer.clone(), None).into());
             }
 
             // ran into timeout
             if let Some(timeout) = self.timeout {
                 if start.elapsed() > timeout {
-                    return Err(ErrorKind::Timeout(needle.to_string(), self.buffer.clone(), timeout).into());
+                    return Err(ErrorKind::Timeout(needle.to_string(),
+                                                  self.buffer.clone(),
+                                                  timeout)
+                                       .into());
                 }
             }
             // nothing matched: wait a little

@@ -64,6 +64,17 @@ impl PtySession {
             .chain_err(|| "cannot write line to process")
     }
 
+    // wrapper around reader::read_until to give more context for errors
+    fn exp(&mut self, needle: &ReadUntil) -> Result<String> {
+        match self.reader.read_until(needle) {
+            Ok(s) => Ok(s),
+            Err(Error(ErrorKind::EOF(expected, got, _), _)) => {
+                Err(ErrorKind::EOF(expected, got, self.process.status()).into())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     /// make sure all bytes written via `send()` are sent to the process
     pub fn flush(&mut self) -> Result<()> {
         self.writer.flush().chain_err(|| "could not flush")
@@ -75,17 +86,20 @@ impl PtySession {
     }
 
     pub fn exp_eof(&mut self) -> Result<()> {
-        self.reader.read_until(&ReadUntil::EOF).and_then(|_| Ok(()))
+        self.exp(&ReadUntil::EOF).and_then(|_| Ok(()))
     }
 
-    pub fn exp_string(&mut self, needle:&str) -> Result<()> {
-        self.reader.read_until(&ReadUntil::String(needle.to_string())).and_then(|_| {
-            Ok(())
-        })
+    pub fn exp_string(&mut self, needle: &str) -> Result<()> {
+        self.exp(&ReadUntil::String(needle.to_string()))
+            .and_then(|_| Ok(()))
     }
 
-    pub fn exp_any(&mut self, needles:Vec<ReadUntil>) -> Result<(String)> {
-        self.reader.read_until(&ReadUntil::Any(needles))
+    pub fn exp_char(&mut self, needle: char) -> Result<()> {
+        self.exp(&ReadUntil::String(needle.to_string())).and_then(|_| Ok(()))
+    }
+
+    pub fn exp_any(&mut self, needles: Vec<ReadUntil>) -> Result<(String)> {
+        self.exp(&ReadUntil::Any(needles))
     }
 }
 
@@ -143,12 +157,13 @@ mod tests {
             let mut p = spawn("sleep 3", Some(1000)).expect("cannot run sleep 3");
             match p.exp_eof() {
                 Ok(_) => assert!(false, "should raise Timeout"),
-                Err(Error (ErrorKind::Timeout, _)) => {},
-                Err(_) => assert!(false, "should raise TimeOut")
+                Err(Error(ErrorKind::Timeout, _)) => {}
+                Err(_) => assert!(false, "should raise TimeOut"),
 
             }
             Ok(())
-        }().expect("test_timeout failed");
+        }()
+                .expect("test_timeout failed");
     }
 
     #[test]
@@ -166,7 +181,8 @@ mod tests {
             p.send_line("hello heaven!")?;
             p.exp_string("hello heaven!")?;
             Ok(())
-        }().expect("test_cat3 failed");
+        }()
+                .expect("test_cat3 failed");
     }
 
     #[test]
@@ -176,9 +192,10 @@ mod tests {
             p.send_line("Hi")?;
             match p.exp_any(vec![ReadUntil::NBytes(3), ReadUntil::String("Hi".to_string())]) {
                 Ok(s) => assert_eq!("Hi\r", s),
-                Err(e) => assert!(false, format!("got error: {}", e))
+                Err(e) => assert!(false, format!("got error: {}", e)),
             }
             Ok(())
-        }().expect("test_expect_any failed");
+        }()
+                .expect("test_expect_any failed");
     }
 }

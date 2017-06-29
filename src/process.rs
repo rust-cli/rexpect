@@ -183,10 +183,8 @@ impl PtyProcess {
                 .chain_err(|| "failed to exit process")?;
 
             match self.status() {
-                Some(status) if status != wait::WaitStatus::StillAlive => {
-                    return Ok(status)
-                },
-                Some(_) | None => thread::sleep(time::Duration::from_millis(100))
+                Some(status) if status != wait::WaitStatus::StillAlive => return Ok(status),
+                Some(_) | None => thread::sleep(time::Duration::from_millis(100)),
             }
         }
     }
@@ -233,7 +231,7 @@ mod tests {
             output += &String::from_utf8_lossy(&buf).to_string();
 
             assert_eq!(output,
-            "hello cat\r\n\
+                       "hello cat\r\n\
         hello cat\r\n\
         ^C");
             let should =
@@ -241,6 +239,6 @@ mod tests {
             assert_eq!(should, wait::waitpid(process.child_pid, None).unwrap());
             Ok(())
         }()
-            .expect("could not execute cat");
+                .expect("could not execute cat");
     }
 }
