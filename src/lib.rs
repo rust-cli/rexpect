@@ -19,7 +19,7 @@ pub mod errors {
             EOF(expected:String, got:String, exit_code:Option<wait::WaitStatus>) {
                 description("End of filestream (usually stdout) occurred, most probably\
                              because the process terminated")
-                display("EOF (End of File): Expected {} but got EOF after reading \"{}\",\
+                display("EOF (End of File): Expected {} but got EOF after reading \"{}\", \
                              process terminated with {:?}", expected, got,
                              exit_code.map(|status| format!("{:?}", status))
                              .unwrap_or("unknown".to_string()))

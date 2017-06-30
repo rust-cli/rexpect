@@ -30,6 +30,7 @@ impl fmt::Display for ReadUntil {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let printable = match self {
             &ReadUntil::String(ref s) if s == "\n" => { "\\n (newline)".to_string()},
+            &ReadUntil::String(ref s) if s == "\r" => { "\\r (carriage return)".to_string()},
             &ReadUntil::String(ref s) => { format!("\"{}\"", s)},
             &ReadUntil::Regex(ref r) => format!("Regex: \"{}\"", r),
             &ReadUntil::EOF => "EOF (End of File)".to_string(),
@@ -166,12 +167,6 @@ impl NBReader {
             }
         }
         Ok(())
-    }
-
-    /// read one line (blocking!) and return line including newline (\r\n for tty processes)
-    /// TODO: example on how to check for EOF
-    pub fn read_line(&mut self) -> Result<String> {
-        return self.read_until(&ReadUntil::String('\n'.to_string()));
     }
 
     /// Read until needle is found (blocking!) and return string until end of needle

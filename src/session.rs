@@ -1,7 +1,7 @@
 //! Main module of rexpect: start new process and interact with it
 
 use process::PtyProcess;
-use reader::NBReader;
+use reader::{NBReader, Regex};
 pub use reader::ReadUntil;
 use std::io::LineWriter;
 use std::fs::File;
@@ -80,13 +80,19 @@ impl PtySession {
         self.writer.flush().chain_err(|| "could not flush")
     }
 
-
+    /// read one line (blocking!) and return line including newline (\r\n for tty processes)
+    /// TODO: example on how to check for EOF
     pub fn read_line(&mut self) -> Result<String> {
-        self.reader.read_line()
+        self.exp(&ReadUntil::String('\n'.to_string()))
     }
 
     pub fn exp_eof(&mut self) -> Result<()> {
         self.exp(&ReadUntil::EOF).and_then(|_| Ok(()))
+    }
+
+    pub fn exp_regex(&mut self, regex: &str) -> Result<()> {
+        self.exp(&ReadUntil::Regex(Regex::new(regex).chain_err(|| "invalid regex")?))
+            .and_then(|_| Ok(()))
     }
 
     pub fn exp_string(&mut self, needle: &str) -> Result<()> {
