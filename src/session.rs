@@ -181,14 +181,20 @@ mod tests {
     #[test]
     fn test_expect_string() {
         || -> Result<()> {
-            let mut p = spawn("cat", Some(1)).expect("cannot run cat");
+            let mut p = spawn("cat", Some(100)).expect("cannot run cat");
+            println!("s 1");
             p.send_line("hello world!")?;
+            println!("s 2");
             p.exp_string("hello world!")?;
+            println!("s 3");
             p.send_line("hello heaven!")?;
+            println!("s 4");
             p.exp_string("hello heaven!")?;
+            println!("s 5");
             Ok(())
         }()
                 .expect("test_cat3 failed");
+        println!("s 6");
     }
 
     #[test]

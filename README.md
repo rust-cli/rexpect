@@ -30,21 +30,28 @@ fn do_ftp() -> Result<()> {
 
 
 fn main() {
-    do_ssh().unwrap_or_else(|e| panic!("ftp job failed with {}", e));
+    do_ftp().unwrap_or_else(|e| panic!("ftp job failed with {}", e));
 }
 ```
 
-# Status
-
-This project is still in early alpha, the api will still change a lot. Contributors more than welcome.
+# Project Status
 
 What already works:
 
-- spawning a process through pty (threadsafe!)
-- writing/reading to/from processes
-- exit/kill processes
+- spawning a processes through pty (threadsafe!), auto cleanup (drop)
+- expect regex/string/EOF including timeouts
+
+What does not yet work:
+
+- repl as in bash/ssh needs support
+- sending ctrl-c, tab etc. (is just not implemented yet but easy to achieve)
+
+What will probably never be implemented
+
+- screen/ANSI support ([deprecated](https://github.com/pexpect/pexpect/blob/master/pexpect/screen.py#L32) in pexpect anyway)
 
 # Design decisions
 
-- use [nix](https://github.com/nix-rust/nix) (and no libc directly) to keep the code safe and clean
-- use error handling of []error-chain](https://github.com/brson/error-chain)
+- use error handling of [error-chain](https://github.com/brson/error-chain)
+- use [nix](https://github.com/nix-rust/nix) (and avoid libc wherever possible) to keep the code safe and clean
+- sadly, `expect` is used in rust too prominently to unwrap `Option`s and `Result`s, use `exp_*` instead
