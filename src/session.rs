@@ -163,7 +163,7 @@ mod tests {
             let mut p = spawn("sleep 3", Some(1000)).expect("cannot run sleep 3");
             match p.exp_eof() {
                 Ok(_) => assert!(false, "should raise Timeout"),
-                Err(Error(ErrorKind::Timeout, _)) => {}
+                Err(Error(ErrorKind::Timeout(_,_,_), _)) => {}
                 Err(_) => assert!(false, "should raise TimeOut"),
 
             }

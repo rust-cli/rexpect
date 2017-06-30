@@ -21,5 +21,5 @@ fn do_ftp() -> Result<()> {
 
 
 fn main() {
-    do_ssh().unwrap_or_else(|e| panic!("ftp job failed with {}", e));
+    do_ftp().unwrap_or_else(|e| panic!("ftp job failed with {}", e));
 }

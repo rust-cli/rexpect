@@ -249,11 +249,11 @@ mod tests {
     fn test_expect_melon() {
         let f = io::Cursor::new("a melon\r\n");
         let mut r = NBReader::new(f, None);
-        assert_eq!("a melon\r\n", r.read_line().expect("cannot read line"));
+        assert_eq!("a melon\r\n", r.read_until(&ReadUntil::String("\r\n".to_string())).expect("cannot read line"));
         // check for EOF
-        match r.read_line() {
+        match r.read_until(&ReadUntil::NBytes(10)) {
             Ok(_) => assert!(false),
-            Err(Error(ErrorKind::EOF, _)) => {}
+            Err(Error(ErrorKind::EOF(_,_,_), _)) => {}
             Err(Error(_, _)) => assert!(false),
         }
     }
