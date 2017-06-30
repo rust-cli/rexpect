@@ -227,24 +227,17 @@ mod tests {
             let mut reader = BufReader::new(&f);
             writer.write(b"hello cat\n")?;
             let mut output = String::new();
-            reader.read_line(&mut output)?; // read back what we just wrote
+            println!("right before we die..");
             reader.read_line(&mut output)?; // read back output of cat
             writer.write(&[3])?;
             writer.flush()?;
 
-            let mut buf = [0; 2];
-            reader.read(&mut buf)?;
-            output += &String::from_utf8_lossy(&buf).to_string();
-
-            assert_eq!(output,
-                       "hello cat\r\n\
-        hello cat\r\n\
-        ^C");
+            assert_eq!(output, "hello cat\r\n");
             let should =
                 wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
             assert_eq!(should, wait::waitpid(process.child_pid, None).unwrap());
             Ok(())
         }()
-                .expect("could not execute cat");
+            .unwrap_or_else(|e| panic!("test_cat failed: {}", e));
     }
 }

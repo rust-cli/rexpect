@@ -49,7 +49,6 @@ impl PtySession {
         len += self.writer
             .write(&['\n' as u8])
             .chain_err(|| "cannot write newline")?;
-        self.read_line()?; // discard what we just wrote into the tty
         Ok(len)
     }
 
@@ -183,19 +182,13 @@ mod tests {
     fn test_expect_string() {
         || -> Result<()> {
             let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
-            println!("s 1");
             p.send_line("hello world!")?;
-            println!("s 2");
             p.exp_string("hello world!")?;
-            println!("s 3");
             p.send_line("hello heaven!")?;
-            println!("s 4");
             p.exp_string("hello heaven!")?;
-            println!("s 5");
             Ok(())
         }()
                 .unwrap_or_else(|e| panic!("test_expect_string failed: {}", e));
-        println!("s 6");
     }
 
     #[test]
