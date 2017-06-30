@@ -29,9 +29,9 @@ pub enum ReadUntil {
 impl fmt::Display for ReadUntil {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let printable = match self {
-            &ReadUntil::String(ref s) if s == "\n" => { "\\n (newline)".to_string()},
-            &ReadUntil::String(ref s) if s == "\r" => { "\\r (carriage return)".to_string()},
-            &ReadUntil::String(ref s) => { format!("\"{}\"", s)},
+            &ReadUntil::String(ref s) if s == "\n" => "\\n (newline)".to_string(),
+            &ReadUntil::String(ref s) if s == "\r" => "\\r (carriage return)".to_string(),
+            &ReadUntil::String(ref s) => format!("\"{}\"", s),
             &ReadUntil::Regex(ref r) => format!("Regex: \"{}\"", r),
             &ReadUntil::EOF => "EOF (End of File)".to_string(),
             &ReadUntil::NBytes(n) => format!("reading {} bytes", n),
@@ -249,11 +249,13 @@ mod tests {
     fn test_expect_melon() {
         let f = io::Cursor::new("a melon\r\n");
         let mut r = NBReader::new(f, None);
-        assert_eq!("a melon\r\n", r.read_until(&ReadUntil::String("\r\n".to_string())).expect("cannot read line"));
+        assert_eq!("a melon\r\n",
+                   r.read_until(&ReadUntil::String("\r\n".to_string()))
+                       .expect("cannot read line"));
         // check for EOF
         match r.read_until(&ReadUntil::NBytes(10)) {
             Ok(_) => assert!(false),
-            Err(Error(ErrorKind::EOF(_,_,_), _)) => {}
+            Err(Error(ErrorKind::EOF(_, _, _), _)) => {}
             Err(Error(_, _)) => assert!(false),
         }
     }

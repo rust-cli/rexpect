@@ -8,7 +8,8 @@
 //! It's main components (depending on your need you can use either of those)
 //!
 //! - [session](session/index.html): automate stuff in Rust
-//! - [reader](reader/index.html): a non-blocking reader with buffering, matching on strings/regex/...
+//! - [reader](reader/index.html): a non-blocking reader with buffering, matching on
+//!   strings/regex/...
 //! - [process](process/index.html): spawn a process in a tty
 //!
 //! # Basic example
@@ -16,10 +17,10 @@
 //! ```no_run
 //!
 //! extern crate rexpect;
-//! 
+//!
 //! use rexpect::spawn;
 //! use rexpect::errors::*;
-//! 
+//!
 //! fn do_ftp() -> Result<()> {
 //!     let mut p = spawn("ftp speedtest.tele2.net", Some(2000))?;
 //!     p.exp_regex("Name \\(.*\\):")?;
@@ -35,8 +36,8 @@
 //!     p.exp_eof()?;
 //!     Ok(())
 //! }
-//! 
-//! 
+//!
+//!
 //! fn main() {
 //!     do_ftp().unwrap_or_else(|e| panic!("ftp job failed with {}", e));
 //! }

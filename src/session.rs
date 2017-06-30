@@ -101,7 +101,8 @@ impl PtySession {
     }
 
     pub fn exp_char(&mut self, needle: char) -> Result<()> {
-        self.exp(&ReadUntil::String(needle.to_string())).and_then(|_| Ok(()))
+        self.exp(&ReadUntil::String(needle.to_string()))
+            .and_then(|_| Ok(()))
     }
 
     pub fn exp_any(&mut self, needles: Vec<ReadUntil>) -> Result<(String)> {
@@ -153,7 +154,7 @@ mod tests {
             assert_eq!(should, s.process.exit()?);
             Ok(())
         }()
-                .expect("could not execute");
+                .unwrap_or_else(|e| panic!("test_read_line failed: {}", e));
     }
 
 
@@ -163,13 +164,13 @@ mod tests {
             let mut p = spawn("sleep 3", Some(1000)).expect("cannot run sleep 3");
             match p.exp_eof() {
                 Ok(_) => assert!(false, "should raise Timeout"),
-                Err(Error(ErrorKind::Timeout(_,_,_), _)) => {}
+                Err(Error(ErrorKind::Timeout(_, _, _), _)) => {}
                 Err(_) => assert!(false, "should raise TimeOut"),
 
             }
             Ok(())
         }()
-                .expect("test_timeout failed");
+                .unwrap_or_else(|e| panic!("test_timeout failed: {}", e));
     }
 
     #[test]
@@ -181,7 +182,7 @@ mod tests {
     #[test]
     fn test_expect_string() {
         || -> Result<()> {
-            let mut p = spawn("cat", Some(100)).expect("cannot run cat");
+            let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
             println!("s 1");
             p.send_line("hello world!")?;
             println!("s 2");
@@ -193,7 +194,7 @@ mod tests {
             println!("s 5");
             Ok(())
         }()
-                .expect("test_cat3 failed");
+                .unwrap_or_else(|e| panic!("test_expect_string failed: {}", e));
         println!("s 6");
     }
 
@@ -208,6 +209,6 @@ mod tests {
             }
             Ok(())
         }()
-                .expect("test_expect_any failed");
+                .unwrap_or_else(|e| panic!("test_expect_any failed: {}", e));
     }
 }
