@@ -7,7 +7,7 @@ use std::{thread, time};
 use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
 use nix::fcntl::{O_RDWR, open};
 use nix;
-use nix::sys::stat;
+use nix::sys::{stat, termios};
 use nix::unistd::{fork, ForkResult, setsid, dup2};
 use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 pub use nix::sys::{wait, signal};
@@ -107,6 +107,12 @@ impl PtyProcess {
                     dup2(slave_fd, STDIN_FILENO)?;
                     dup2(slave_fd, STDOUT_FILENO)?;
                     dup2(slave_fd, STDERR_FILENO)?;
+
+                    // set echo off
+                    let mut flags = termios::tcgetattr(STDIN_FILENO)?;
+                    flags.c_lflag &= !termios::ECHO;
+                    termios::tcsetattr(STDIN_FILENO, termios::SetArg::TCSANOW, &flags)?;
+
                     command.exec();
                     Err(nix::Error::last())
                 }
