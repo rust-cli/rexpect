@@ -3,7 +3,7 @@ extern crate rexpect;
 use rexpect::spawn;
 use rexpect::errors::*;
 
-fn do_ssh() -> Result<()> {
+fn do_ftp() -> Result<()> {
     let mut p = spawn("ftp speedtest.tele2.net", Some(2000))?;
     p.exp_regex("Name \\(.*\\):")?;
     p.send_line("anonymous")?;
@@ -14,13 +14,12 @@ fn do_ssh() -> Result<()> {
     p.exp_string("successfully changed.\r\nftp>")?;
     p.send_line("pwd")?;
     p.exp_regex("[0-9]+ \"/upload\"")?;
+    p.send_line("exit")?;
+    p.exp_eof()?;
     Ok(())
 }
 
 
 fn main() {
-    match do_ssh() {
-        Err(e) => println!("ran into problem: {}", e),
-        Ok(_) => {}
-    }
+    do_ssh().unwrap_or_else(|e| panic!("ftp job failed with {}", e));
 }

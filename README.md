@@ -12,7 +12,7 @@ extern crate rexpect;
 use rexpect::spawn;
 use rexpect::errors::*;
 
-fn ftp_job() -> Result<()> {
+fn do_ftp() -> Result<()> {
     let mut p = spawn("ftp speedtest.tele2.net", Some(2000))?;
     p.exp_regex("Name \\(.*\\):")?;
     p.send_line("anonymous")?;
@@ -23,9 +23,15 @@ fn ftp_job() -> Result<()> {
     p.exp_string("successfully changed.\r\nftp>")?;
     p.send_line("pwd")?;
     p.exp_regex("[0-9]+ \"/upload\"")?;
+    p.send_line("exit")?;
+    p.exp_eof()?;
     Ok(())
 }
 
+
+fn main() {
+    do_ssh().unwrap_or_else(|e| panic!("ftp job failed with {}", e));
+}
 ```
 
 # Status
