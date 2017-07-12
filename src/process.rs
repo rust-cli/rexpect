@@ -8,7 +8,7 @@ use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
 use nix::fcntl::{O_RDWR, open};
 use nix;
 use nix::sys::{stat, termios};
-use nix::unistd::{fork, ForkResult, setsid, dup2};
+use nix::unistd::{fork, ForkResult, setsid, dup2, Pid};
 use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 pub use nix::sys::{wait, signal};
 use errors::*; // load error-chain
@@ -53,7 +53,7 @@ use errors::*; // load error-chain
 /// ```
 pub struct PtyProcess {
     pub pty: PtyMaster,
-    pub child_pid: i32,
+    pub child_pid: Pid,
 }
 
 
@@ -110,7 +110,7 @@ impl PtyProcess {
 
                     // set echo off
                     let mut flags = termios::tcgetattr(STDIN_FILENO)?;
-                    flags.c_lflag &= !termios::ECHO;
+                    flags.local_flags &= !termios::ECHO;
                     termios::tcsetattr(STDIN_FILENO, termios::SetArg::TCSANOW, &flags)?;
 
                     command.exec();
@@ -185,8 +185,13 @@ impl PtyProcess {
     /// TODO: this needs some way of timeout before we send a kill -9
     pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus> {
         loop {
-            signal::kill(self.child_pid, sig)
-                .chain_err(|| "failed to exit process")?;
+            match signal::kill(self.child_pid, sig) {
+                Ok(_) => {},
+                // process was already killed before -> ignore
+                Err(nix::Error::Sys(nix::Errno::ESRCH)) => {return Ok(wait::WaitStatus::Exited(Pid::from_raw(0),0))}
+                Err(e) => return Err(format!("kill resulted in error: {:?}", e).into())
+            }
+
 
             match self.status() {
                 Some(status) if status != wait::WaitStatus::StillAlive => return Ok(status),
