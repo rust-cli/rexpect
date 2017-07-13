@@ -231,15 +231,12 @@ mod tests {
             let mut writer = LineWriter::new(&f);
             let mut reader = BufReader::new(&f);
             writer.write(b"hello cat\n")?;
-            let mut output = String::new();
             println!("right before we die..");
-            let mut buf = [0u8;1];
-            while let Ok(_) = reader.read(&mut buf) {
-                println!("{:?}", buf[0] as char);
-            }
-            reader.read_line(&mut output)?; // read back output of cat
+            let mut buf = Vec::new();
+            reader.read_until('\n' as u8, &mut buf)?; // read back output of cat
             writer.write(&[3])?;
             writer.flush()?;
+            let output:String = String::from_utf8(buf).expect("utf8 error");
 
             assert_eq!(output, "hello cat\r\n");
             let should =
