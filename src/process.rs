@@ -233,6 +233,10 @@ mod tests {
             writer.write(b"hello cat\n")?;
             let mut output = String::new();
             println!("right before we die..");
+            let mut buf = [0u8;1];
+            while let Ok(_) = reader.read(&mut buf) {
+                println!("{:?}", buf[0] as char);
+            }
             reader.read_line(&mut output)?; // read back output of cat
             writer.write(&[3])?;
             writer.flush()?;
