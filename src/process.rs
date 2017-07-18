@@ -234,11 +234,14 @@ mod tests {
             println!("right before we die..");
             let mut buf = Vec::new();
             reader.read_until('\n' as u8, &mut buf)?; // read back output of cat
-            writer.write(&[3])?;
-            writer.flush()?;
-            let output:String = String::from_utf8(buf).expect("utf8 error");
 
+            let output:String = String::from_utf8(buf).expect("utf8 error");
             assert_eq!(output, "hello cat\r\n");
+
+            // on Linux, for some reason, we need to try reading here, otherwise the ^C won't work  
+            reader.read(&mut [0])?;
+            writer.write(&[3])?; // send ^C
+            writer.flush()?;
             let should =
                 wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
             assert_eq!(should, wait::waitpid(process.child_pid, None).unwrap());
