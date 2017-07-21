@@ -1,7 +1,9 @@
+
 use std::io::{self, BufReader};
 use std::io::prelude::*;
 use std::sync::mpsc::{channel, Receiver};
 use std::{thread, result};
+use std::{time, fmt};
 use errors::*; // load error-chain
 pub use regex::Regex;
 
@@ -21,6 +23,67 @@ pub enum ReadUntil {
     Regex(Regex),
     EOF,
     NBytes(usize),
+    Any(Vec<ReadUntil>),
+}
+
+impl fmt::Display for ReadUntil {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let printable = match self {
+            &ReadUntil::String(ref s) if s == "\n" => "\\n (newline)".to_string(),
+            &ReadUntil::String(ref s) if s == "\r" => "\\r (carriage return)".to_string(),
+            &ReadUntil::String(ref s) => format!("\"{}\"", s),
+            &ReadUntil::Regex(ref r) => format!("Regex: \"{}\"", r),
+            &ReadUntil::EOF => "EOF (End of File)".to_string(),
+            &ReadUntil::NBytes(n) => format!("reading {} bytes", n),
+            &ReadUntil::Any(ref v) => {
+                let mut res = Vec::new();
+                for r in v {
+                    res.push(r.to_string());
+                }
+                res.join(", ")
+            }
+        };
+        write!(f, "{}", printable)
+    }
+}
+
+/// find first occurrence of needle within buffer
+///
+/// # Arguments:
+///
+/// - buffer: the currently read buffer from a process which will still grow in the future
+/// - eof: if the process already sent an EOF or a HUP
+pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<usize> {
+    match needle {
+        &ReadUntil::String(ref s) => buffer.find(s).and_then(|pos| Some(pos + s.len())),
+        &ReadUntil::Regex(ref pattern) => {
+            if let Some(mat) = pattern.find(buffer) {
+                Some(mat.end())
+            } else {
+                None
+            }
+        }
+        &ReadUntil::EOF => if eof { Some(buffer.len()) } else { None },
+        &ReadUntil::NBytes(n) => {
+            if n <= buffer.len() {
+                Some(n)
+            } else if eof && buffer.len() > 0 {
+                // reached almost end of buffer, return string, even though it will be
+                // smaller than the wished n bytes
+                Some(buffer.len())
+            } else {
+                None
+            }
+        }
+        &ReadUntil::Any(ref any) => {
+            for read_until in any {
+                if let Some(pos) = find(&read_until, buffer, eof) {
+                    return Some(pos);
+                }
+            }
+            None
+        }
+    }
 }
 
 /// Non blocking reader
@@ -35,10 +98,17 @@ pub struct NBReader {
     reader: Receiver<result::Result<PipedChar, PipeError>>,
     buffer: String,
     eof: bool,
+    timeout: Option<time::Duration>,
 }
 
 impl NBReader {
-    pub fn new<R: Read + Send + 'static>(f: R) -> NBReader {
+    /// Create a new reader instance
+    ///
+    /// f: file like object
+    /// timeout:
+    /// - None: read_until is blocking forever. This is probably not what you want
+    /// - Some(millis): after millis millisecons a timeout error is raised
+    pub fn new<R: Read + Send + 'static>(f: R, timeout: Option<u64>) -> NBReader {
         let (tx, rx) = channel();
 
         // spawn a thread which reads one char and sends it to tx
@@ -73,6 +143,7 @@ impl NBReader {
             reader: rx,
             buffer: String::with_capacity(1024),
             eof: false,
+            timeout: timeout.and_then(|millis| Some(time::Duration::from_millis(millis))),
         }
     }
 
@@ -85,16 +156,17 @@ impl NBReader {
             match from_channel {
                 Ok(PipedChar::Char(c)) => self.buffer.push(c as char),
                 Ok(PipedChar::EOF) => self.eof = true,
-                Err(_) => return Err("cannot read from channel".into()),
+                // this is just from experience, e.g. "sleep 5" returns the other error which
+                // most probably means that there is no stdout stream at all -> send EOF
+                // this only happens on Linux, not on OSX
+                Err(PipeError::IO(ref err)) if err.kind() == io::ErrorKind::Other => {
+                    self.eof = true
+                }
+                // discard other errors
+                Err(_) => {}
             }
         }
         Ok(())
-    }
-
-    /// read one line (blocking!) and return line including newline (\r\n for tty processes)
-    /// TODO: example on how to check for EOF
-    pub fn read_line(&mut self) -> Result<String> {
-        return self.read_until(&ReadUntil::String('\n'.to_string()))
     }
 
     /// Read until needle is found (blocking!) and return string until end of needle
@@ -103,8 +175,8 @@ impl NBReader {
     ///
     /// There are different modes:
     ///
-    /// - `ReadUntil::String` searches for String and returns the read bytes until and with the needle
-    ///   (use '\n'.to_string() to search for newline)
+    /// - `ReadUntil::String` searches for String and returns the read bytes
+    ///    until and with the needle (use '\n'.to_string() to search for newline)
     /// - `ReadUntil::Regex` searches for regex and returns string until and with the found chars
     ///   which match the regex
     /// - `ReadUntil::NBytes` reads maximum n bytes
@@ -122,7 +194,7 @@ impl NBReader {
     /// // instead of a Cursor you would put your process output or file here
     /// let f = Cursor::new("Hello, miss!\n\
     ///                         What do you mean: 'miss'?");
-    /// let mut e = NBReader::new(f);
+    /// let mut e = NBReader::new(f, None);
     ///
     /// let first_line = e.read_until(&ReadUntil::String('\n'.to_string())).unwrap();
     /// assert_eq!("Hello, miss!\n", &first_line);
@@ -139,42 +211,32 @@ impl NBReader {
     /// ```
     ///
     pub fn read_until(&mut self, needle: &ReadUntil) -> Result<String> {
+        let start = time::Instant::now();
+
         loop {
             self.read_into_buffer()?;
-            let offset = match needle {
-                &ReadUntil::String(ref s) => self.buffer.find(s).and_then(|pos| Some(pos + s.len())),
-                &ReadUntil::Regex(ref r) => {
-                    if let Some(mat) = r.find(&self.buffer) {
-                        Some(mat.end())
-                    } else {
-                        None
-                    }
-                }
-                &ReadUntil::EOF => {
-                    if self.eof {
-                        Some(self.buffer.len())
-                    } else {
-                        None
-                    }
-                },
-                &ReadUntil::NBytes(n) => {
-                    if n <= self.buffer.len() {
-                        Some(n)
-                    } else if self.eof && self.buffer.len() > 0 {
-                        // reached almost end of buffer, return string, even though it will be
-                        // smaller than the wished n bytes
-                        Some(self.buffer.len())
-                    } else {
-                        None
-                    }
-                }
-            };
-            if let Some(offset) = offset {
+            if let Some(offset) = find(needle, &self.buffer, self.eof) {
                 return Ok(self.buffer.drain(..offset).collect());
-            } else if self.eof {
-                // reached end of stream and didn't match -> error
-                return Err(ErrorKind::EOF.into());
             }
+
+            // reached end of stream and didn't match -> error
+            // we don't know the reason of eof yet, so we provide an empty string
+            // this will be filled out in session::exp()
+            if self.eof {
+                return Err(ErrorKind::EOF(needle.to_string(), self.buffer.clone(), None).into());
+            }
+
+            // ran into timeout
+            if let Some(timeout) = self.timeout {
+                if start.elapsed() > timeout {
+                    return Err(ErrorKind::Timeout(needle.to_string(),
+                                                  self.buffer.clone(),
+                                                  timeout)
+                                       .into());
+                }
+            }
+            // nothing matched: wait a little
+            thread::sleep(time::Duration::from_millis(100));
         }
     }
 }
@@ -186,12 +248,14 @@ mod tests {
     #[test]
     fn test_expect_melon() {
         let f = io::Cursor::new("a melon\r\n");
-        let mut r = NBReader::new(f);
-        assert_eq!("a melon\r\n", r.read_line().expect("cannot read line"));
+        let mut r = NBReader::new(f, None);
+        assert_eq!("a melon\r\n",
+                   r.read_until(&ReadUntil::String("\r\n".to_string()))
+                       .expect("cannot read line"));
         // check for EOF
-        match r.read_line() {
+        match r.read_until(&ReadUntil::NBytes(10)) {
             Ok(_) => assert!(false),
-            Err(Error(ErrorKind::EOF, _)) => {}
+            Err(Error(ErrorKind::EOF(_, _, _), _)) => {}
             Err(Error(_, _)) => assert!(false),
         }
     }
@@ -199,7 +263,7 @@ mod tests {
     #[test]
     fn test_regex() {
         let f = io::Cursor::new("2014-03-15");
-        let mut r = NBReader::new(f);
+        let mut r = NBReader::new(f, None);
         let re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
         r.read_until(&ReadUntil::Regex(re))
             .expect("regex doesn't match");
@@ -208,10 +272,9 @@ mod tests {
     #[test]
     fn test_nbytes() {
         let f = io::Cursor::new("abcdef");
-        let mut r = NBReader::new(f);
+        let mut r = NBReader::new(f, None);
         assert_eq!("ab", r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes"));
         assert_eq!("cde", r.read_until(&ReadUntil::NBytes(3)).expect("3 bytes"));
         assert_eq!("f", r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes"));
     }
-
 }

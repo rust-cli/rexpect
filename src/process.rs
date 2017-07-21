@@ -1,14 +1,16 @@
 //! Start a process via pty
 
 use std;
+use std::fs::File;
 use std::process::Command;
 use std::os::unix::process::CommandExt;
+use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::{thread, time};
 use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
 use nix::fcntl::{O_RDWR, open};
 use nix;
-use nix::sys::stat;
-use nix::unistd::{fork, ForkResult, setsid, dup2};
+use nix::sys::{stat, termios};
+use nix::unistd::{fork, ForkResult, setsid, dup, dup2, Pid};
 use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 pub use nix::sys::{wait, signal};
 use errors::*; // load error-chain
@@ -36,11 +38,13 @@ use errors::*; // load error-chain
 /// use std::fs::File;
 /// use std::io::{BufReader, LineWriter};
 /// use std::os::unix::io::{FromRawFd, AsRawFd};
+/// use nix::unistd::dup;
 ///
 /// # fn main() {
 ///
 /// let mut process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
-/// let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
+/// let fd = dup(process.pty.as_raw_fd()).unwrap();
+/// let f = unsafe { File::from_raw_fd(fd) };
 /// let mut writer = LineWriter::new(&f);
 /// let mut reader = BufReader::new(&f);
 /// process.exit().expect("could not terminate process");
@@ -53,8 +57,7 @@ use errors::*; // load error-chain
 /// ```
 pub struct PtyProcess {
     pub pty: PtyMaster,
-    pub child_pid: i32,
-    exit_status: Option<wait::WaitStatus>,
+    pub child_pid: Pid,
 }
 
 
@@ -108,6 +111,12 @@ impl PtyProcess {
                     dup2(slave_fd, STDIN_FILENO)?;
                     dup2(slave_fd, STDOUT_FILENO)?;
                     dup2(slave_fd, STDERR_FILENO)?;
+
+                    // set echo off
+                    let mut flags = termios::tcgetattr(STDIN_FILENO)?;
+                    flags.local_flags &= !termios::ECHO;
+                    termios::tcsetattr(STDIN_FILENO, termios::SetArg::TCSANOW, &flags)?;
+
                     command.exec();
                     Err(nix::Error::last())
                 }
@@ -115,12 +124,17 @@ impl PtyProcess {
                     Ok(PtyProcess {
                            pty: master_fd,
                            child_pid: child_pid,
-                           exit_status: None,
                        })
                 }
             }
         }()
                 .chain_err(|| format!("could not execute {:?}", command))
+    }
+
+    pub fn get_file_handle(&self) -> File {
+        // needed because otherwise fd is closed both by dropping process and reader/writer
+        let fd = dup(self.pty.as_raw_fd()).unwrap();
+        unsafe { File::from_raw_fd(fd) }
     }
 
     /// Get status of child process, nonblocking.
@@ -146,11 +160,12 @@ impl PtyProcess {
     /// # }
     /// ```
     ///
-    pub fn status(&self) -> Result<(wait::WaitStatus)> {
-        if let Some(exit_status) = self.exit_status {
-            return Ok(exit_status);
+    pub fn status(&self) -> Option<(wait::WaitStatus)> {
+        if let Ok(status) = wait::waitpid(self.child_pid, Some(wait::WNOHANG)) {
+            Some(status)
+        } else {
+            None
         }
-        wait::waitpid(self.child_pid, Some(wait::WNOHANG)).chain_err(|| "cannot read status")
     }
 
     /// Wait until process has exited. This is a blocking call.
@@ -164,32 +179,42 @@ impl PtyProcess {
         self.kill(signal::SIGTERM)
     }
 
+    /// nonblocking variant of `kill()` (doesn't wait for process to be killed)
+    pub fn signal(&mut self, sig: signal::Signal) -> Result<()> {
+        signal::kill(self.child_pid, sig)
+            .chain_err(|| "failed to send signal to process")?;
+        Ok(())
+    }
+
     /// kills the process with a specific signal. This method blocks, until the process is dead
     ///
-    /// sends SIGTERM to the process, the pty session is closed upon dropping PtyMaster,
-    /// so we don't need to explicitely do that
+    /// repeatedly sends SIGTERM to the process until it died,
+    /// the pty session is closed upon dropping PtyMaster,
+    /// so we don't need to explicitely do that here.
     ///
-    /// TODO: we need a method `signal` which doesn't wait for termination
     /// TODO: this needs some way of timeout before we send a kill -9
     pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus> {
-        signal::kill(self.child_pid, sig)
-            .chain_err(|| "failed to exit process")?;
-        while let Ok(status) = self.status() {
-            if status != wait::WaitStatus::StillAlive {
-                self.exit_status = Some(status);
-                return Ok(status);
+        loop {
+            match signal::kill(self.child_pid, sig) {
+                Ok(_) => {},
+                // process was already killed before -> ignore
+                Err(nix::Error::Sys(nix::Errno::ESRCH)) => {return Ok(wait::WaitStatus::Exited(Pid::from_raw(0),0))}
+                Err(e) => return Err(format!("kill resulted in error: {:?}", e).into())
             }
-            // TODO: should support a timeout
-            thread::sleep(time::Duration::from_millis(100));
+
+
+            match self.status() {
+                Some(status) if status != wait::WaitStatus::StillAlive => return Ok(status),
+                Some(_) | None => thread::sleep(time::Duration::from_millis(100)),
+            }
         }
-        Err("cannot read status, maybe it was already killed..".into())
     }
 }
 
 impl Drop for PtyProcess {
     fn drop(&mut self) {
         match self.status() {
-            Ok(wait::WaitStatus::StillAlive) => {
+            Some(wait::WaitStatus::StillAlive) => {
                 self.exit().expect("cannot exit");
             }
             _ => {}
@@ -201,7 +226,7 @@ impl Drop for PtyProcess {
 mod tests {
     use super::*;
     use std::fs::File;
-    use std::io::{BufReader, LineWriter, Result};
+    use std::io::{BufReader, LineWriter};
     use nix::sys::{wait, signal};
     use std::os::unix::io::{FromRawFd, AsRawFd};
     use std::io::prelude::*;
@@ -210,42 +235,25 @@ mod tests {
     /// Open cat, write string, read back string twice, send Ctrl^C and check that cat exited
     fn test_cat() {
         // wrapping into closure so I can use ?
-        || -> Result<()> {
-            println!("cat: 1");
+        || -> std::io::Result<()> {
             let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
-            println!("cat: 2");
-            let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
-            println!("cat: 3");
+            // needed because otherwise fd is closed both by dropping process and f
+            let fd = dup(process.pty.as_raw_fd()).unwrap();
+            let f = unsafe { File::from_raw_fd(fd) };
             let mut writer = LineWriter::new(&f);
             let mut reader = BufReader::new(&f);
-            println!("cat: 4");
             writer.write(b"hello cat\n")?;
-            let mut output = String::new();
-            println!("cat: 5");
-            reader.read_line(&mut output)?; // read back what we just wrote
-            reader.read_line(&mut output)?; // read back output of cat
-            println!("cat: 6");
-            writer.write(&[3])?;
+            let mut buf = String::new();
+            reader.read_line(&mut buf)?;
+            assert_eq!(buf, "hello cat\r\n");
+
+            writer.write(&[3])?; // send ^C
             writer.flush()?;
-
-            println!("cat: 7");
-            let mut buf = [0; 2];
-            reader.read(&mut buf)?;
-            println!("cat: 8");
-            output += &String::from_utf8_lossy(&buf).to_string();
-
-            assert_eq!(output,
-                       "hello cat\r\n\
-        hello cat\r\n\
-        ^C");
-            println!("cat: 9");
             let should =
                 wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
             assert_eq!(should, wait::waitpid(process.child_pid, None).unwrap());
-            println!("cat: 10");
             Ok(())
         }()
-                .expect("could not execute cat");
-        println!("11");
+            .unwrap_or_else(|e| panic!("test_cat failed: {}", e));
     }
 }
