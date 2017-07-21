@@ -6,7 +6,16 @@ The goal is to offer a similar set of functionality as [pexpect](https://pexpect
 
 # Basic usage
 
+Add this to your `Cargo.toml` (sorry, not posted to crates.io yet)
+
+```toml
+[dependencies]
+rexpect = {git = "https://github.com/philippkeller/rexpect"}
 ```
+
+Simple example for interacting via ftp:
+
+```rust
 extern crate rexpect;
 
 use rexpect::spawn;
