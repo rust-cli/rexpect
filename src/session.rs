@@ -3,10 +3,9 @@
 use process::PtyProcess;
 use reader::{NBReader, Regex};
 pub use reader::ReadUntil;
-use std::io::LineWriter;
 use std::fs::File;
+use std::io::LineWriter;
 use std::process::Command;
-use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::io::prelude::*;
 use errors::*; // load error-chain
 
@@ -126,7 +125,8 @@ pub fn spawn_command(command: Command, timeout: Option<u64>) -> Result<PtySessio
     let commandname = format!("{:?}", &command);
     let process = PtyProcess::new(command)
         .chain_err(|| "couldn't start process")?;
-    let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
+
+    let f = process.get_file_handle();
     let writer = LineWriter::new(f.try_clone().chain_err(|| "couldn't open write stream")?);
     let reader = NBReader::new(f, timeout);
     Ok(PtySession {

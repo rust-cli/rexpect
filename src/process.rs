@@ -1,14 +1,16 @@
 //! Start a process via pty
 
 use std;
+use std::fs::File;
 use std::process::Command;
 use std::os::unix::process::CommandExt;
+use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::{thread, time};
 use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
 use nix::fcntl::{O_RDWR, open};
 use nix;
 use nix::sys::{stat, termios};
-use nix::unistd::{fork, ForkResult, setsid, dup2, Pid};
+use nix::unistd::{fork, ForkResult, setsid, dup, dup2, Pid};
 use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 pub use nix::sys::{wait, signal};
 use errors::*; // load error-chain
@@ -36,11 +38,13 @@ use errors::*; // load error-chain
 /// use std::fs::File;
 /// use std::io::{BufReader, LineWriter};
 /// use std::os::unix::io::{FromRawFd, AsRawFd};
+/// use nix::unistd::dup;
 ///
 /// # fn main() {
 ///
 /// let mut process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
-/// let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
+/// let fd = dup(process.pty.as_raw_fd()).unwrap();
+/// let f = unsafe { File::from_raw_fd(fd) };
 /// let mut writer = LineWriter::new(&f);
 /// let mut reader = BufReader::new(&f);
 /// process.exit().expect("could not terminate process");
@@ -125,6 +129,12 @@ impl PtyProcess {
             }
         }()
                 .chain_err(|| format!("could not execute {:?}", command))
+    }
+
+    pub fn get_file_handle(&self) -> File {
+        // needed because otherwise fd is closed both by dropping process and reader/writer
+        let fd = dup(self.pty.as_raw_fd()).unwrap();
+        unsafe { File::from_raw_fd(fd) }
     }
 
     /// Get status of child process, nonblocking.
@@ -227,19 +237,16 @@ mod tests {
         // wrapping into closure so I can use ?
         || -> std::io::Result<()> {
             let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
-            let f = unsafe { File::from_raw_fd(process.pty.as_raw_fd()) };
+            // needed because otherwise fd is closed both by dropping process and f
+            let fd = dup(process.pty.as_raw_fd()).unwrap();
+            let f = unsafe { File::from_raw_fd(fd) };
             let mut writer = LineWriter::new(&f);
             let mut reader = BufReader::new(&f);
             writer.write(b"hello cat\n")?;
-            println!("right before we die..");
-            let mut buf = Vec::new();
-            reader.read_until('\n' as u8, &mut buf)?; // read back output of cat
+            let mut buf = String::new();
+            reader.read_line(&mut buf)?;
+            assert_eq!(buf, "hello cat\r\n");
 
-            let output:String = String::from_utf8(buf).expect("utf8 error");
-            assert_eq!(output, "hello cat\r\n");
-
-            // on Linux, for some reason, we need to try reading here, otherwise the ^C won't work  
-            reader.read(&mut [0])?;
             writer.write(&[3])?; // send ^C
             writer.flush()?;
             let should =
