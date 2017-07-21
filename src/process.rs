@@ -247,7 +247,10 @@ mod tests {
             reader.read_line(&mut buf)?;
             assert_eq!(buf, "hello cat\r\n");
 
-            writer.write(&[3])?; // send ^C
+            // this sleep solves an edge case of some cases when cat is somehow not "ready"
+            // to take the ^C (occasional test hangs)
+            thread::sleep(time::Duration::from_millis(100));
+            writer.write_all(&[3])?; // send ^C
             writer.flush()?;
             let should =
                 wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
