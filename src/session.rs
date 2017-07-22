@@ -3,7 +3,8 @@
 use process::PtyProcess;
 use reader::{NBReader, Regex};
 pub use reader::ReadUntil;
-use std::fs::File;
+use std::env;
+use std::fs::{File, remove_file};
 use std::io::LineWriter;
 use std::process::Command;
 use std::io::prelude::*;
@@ -109,6 +110,7 @@ impl PtySession {
 }
 
 /// Start command in a pty session. Splits string at space and handles the rest as args
+/// see spawn_command for more documentation.
 pub fn spawn(program: &str, timeout: Option<u64>) -> Result<PtySession> {
     let command = if program.find(" ").is_some() {
         let mut parts = program.split(" ");
@@ -121,6 +123,10 @@ pub fn spawn(program: &str, timeout: Option<u64>) -> Result<PtySession> {
     spawn_command(command, timeout)
 }
 
+/// starts command in background in a pty session (pty fork) and return a struct
+/// with writer and buffered reader (for unblocking reads).
+///
+/// timeout: the number of milliseconds to wait at each `exp_*` command
 pub fn spawn_command(command: Command, timeout: Option<u64>) -> Result<PtySession> {
     let commandname = format!("{:?}", &command);
     let process = PtyProcess::new(command)
@@ -135,6 +141,24 @@ pub fn spawn_command(command: Command, timeout: Option<u64>) -> Result<PtySessio
            reader: reader,
            commandname: commandname,
        })
+}
+
+pub fn spawn_bash(timeout: Option<u64>) -> Result<PtySession> {
+    let mut dir = env::temp_dir();
+    dir.push("rexpext_bashrc.sh");
+    {
+        let mut f = File::create(&dir).chain_err(|| "cannot create bashrc temp file")?;
+        f.write(b"source /etc/bash.bashrc\n\
+                  source ~/.bashrc\n\
+                  PS1=\"$\"\n").chain_err(|| "cannot write to tmpfile")?;
+    }
+    let mut c = Command::new("bash");
+    c.args(&["--rcfile", dir.to_str().unwrap()]);
+    spawn_command(c, timeout).and_then(|mut p| {
+        p.exp_char('$')?; // waiting for prompt
+        remove_file(dir).chain_err(|| "cannot remove tmpfile")?;
+        Ok(p)
+    })
 }
 
 #[cfg(test)]
@@ -203,5 +227,18 @@ mod tests {
             Ok(())
         }()
                 .unwrap_or_else(|e| panic!("test_expect_any failed: {}", e));
+    }
+
+    #[test]
+    fn test_bash() {
+        || -> Result<()> {
+            let mut p = spawn_bash(None)?;
+            p.send_line("pwd");
+            println!("{}", p.read_line()?);
+            p.send_line("cd /tmp/");
+            p.send_line("pwd");
+            println!("{}", p.read_line()?);
+            Ok(())
+        }().unwrap_or_else(|e| panic!("test_bash failed: {}", e));
     }
 }
