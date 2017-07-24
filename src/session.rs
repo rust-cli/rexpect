@@ -8,6 +8,7 @@ use std::fs::{File, remove_file};
 use std::io::LineWriter;
 use std::process::Command;
 use std::io::prelude::*;
+use std::ops::{Deref, DerefMut};
 use errors::*; // load error-chain
 
 /// Interact with a process with read/write/signals, etc.
@@ -38,7 +39,6 @@ pub struct PtySession {
 ///     # }().expect("test failed");
 /// # }
 /// ```
-
 impl PtySession {
     /// sends string and a newline to process
     ///
@@ -143,7 +143,28 @@ pub fn spawn_command(command: Command, timeout: Option<u64>) -> Result<PtySessio
        })
 }
 
-pub fn spawn_bash(timeout: Option<u64>) -> Result<PtySession> {
+pub struct PtyBashSession {
+    prompt: String,
+    pty_session: PtySession,
+}
+
+impl PtyBashSession {
+    fn wait_for_prompt(&mut self) -> Result<()> {
+        self.pty_session.exp_string(&self.prompt.clone())
+    }
+}
+
+// make PtySession's methods available directly
+impl Deref for PtyBashSession {
+    type Target = PtySession;
+    fn deref(&self) -> &PtySession { &self.pty_session }
+}
+
+impl DerefMut for PtyBashSession {
+    fn deref_mut(&mut self) -> &mut PtySession { &mut self.pty_session }
+}
+
+pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyBashSession> {
     let mut dir = env::temp_dir();
     dir.push("rexpext_bashrc.sh");
     {
@@ -157,7 +178,7 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtySession> {
     spawn_command(c, timeout).and_then(|mut p| {
         p.exp_char('$')?; // waiting for prompt
         remove_file(dir).chain_err(|| "cannot remove tmpfile")?;
-        Ok(p)
+        Ok(PtyBashSession { prompt: "$".to_string(), pty_session: p })
     })
 }
 
@@ -233,11 +254,12 @@ mod tests {
     fn test_bash() {
         || -> Result<()> {
             let mut p = spawn_bash(None)?;
-            p.send_line("pwd");
-            println!("{}", p.read_line()?);
-            p.send_line("cd /tmp/");
-            p.send_line("pwd");
-            println!("{}", p.read_line()?);
+            p.send_line("pwd")?;
+            p.wait_for_prompt()?;
+            p.send_line("cd /tmp/")?;
+            p.wait_for_prompt()?;
+            p.send_line("pwd")?;
+            assert_eq!("/tmp\r\n", p.read_line()?);
             Ok(())
         }().unwrap_or_else(|e| panic!("test_bash failed: {}", e));
     }
