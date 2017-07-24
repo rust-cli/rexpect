@@ -150,7 +150,7 @@ pub struct PtyBashSession {
 
 impl PtyBashSession {
     fn wait_for_prompt(&mut self) -> Result<()> {
-        self.pty_session.exp_string(&self.prompt.clone())
+        self.pty_session.exp_string(&self.prompt)
     }
 }
 
@@ -177,8 +177,13 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyBashSession> {
     c.args(&["--rcfile", dir.to_str().unwrap()]);
     spawn_command(c, timeout).and_then(|mut p| {
         p.exp_char('$')?; // waiting for prompt
+        let new_prompt = "[REXPECT_PROMPT>";
+        p.send_line(&("PS1='".to_string() + new_prompt + "'"))?;
         remove_file(dir).chain_err(|| "cannot remove tmpfile")?;
-        Ok(PtyBashSession { prompt: "$".to_string(), pty_session: p })
+        let mut pb = PtyBashSession { prompt: new_prompt.to_string(), pty_session: p };
+        // PS1 does print another prompt, consume that as well
+        pb.wait_for_prompt()?;
+        Ok(pb)
     })
 }
 
@@ -254,8 +259,6 @@ mod tests {
     fn test_bash() {
         || -> Result<()> {
             let mut p = spawn_bash(None)?;
-            p.send_line("pwd")?;
-            p.wait_for_prompt()?;
             p.send_line("cd /tmp/")?;
             p.wait_for_prompt()?;
             p.send_line("pwd")?;
