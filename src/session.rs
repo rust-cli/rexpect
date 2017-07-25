@@ -164,6 +164,15 @@ impl DerefMut for PtyBashSession {
     fn deref_mut(&mut self) -> &mut PtySession { &mut self.pty_session }
 }
 
+impl Drop for PtyBashSession {
+    fn drop(&mut self) {
+        // if we leave that out, PtyProcess would try to kill the bash
+        // which would not work, as a SIGTERM is not enough to kill bash
+        self.pty_session.send_line("exit").expect("could not run `exit` on bash process");
+    }
+}
+
+
 pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyBashSession> {
     let mut dir = env::temp_dir();
     dir.push("rexpext_bashrc.sh");
