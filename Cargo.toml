@@ -5,6 +5,6 @@ version = "0.1.0"
 authors = ["Philipp Keller <philipp.keller@gmail.com>"]
 
 [dependencies]
-nix = {git = "https://github.com/nix-rust/nix.git"}
+nix = "0.9"
 regex = "0.2"
 error-chain = "0.10"
