@@ -186,15 +186,27 @@ pub struct PtyBashSession {
     pty_session: PtySession,
 }
 
+/// TODO: needs an example
 impl PtyBashSession {
     pub fn wait_for_prompt(&mut self) -> Result<()> {
         self.pty_session.exp_string(&self.prompt)
     }
 
-    /// sends cmd to bash and waits 10ms to let the scheduler run the command
-    /// caution: there is no guarantee that after the 10ms the command is actually started!
-    /// to be sure that the startup time of cmd is over you best wait for a certain output
+    /// Send cmd to bash and wait 10ms to let the scheduler run the command, then immediately
+    /// return (nonblocking! i.e. does not wait for the cmd to finish)
+    ///
+    /// Caution: there is no guarantee that after the 10ms the command is actually started!
+    /// To be sure that the startup time of cmd is over you best wait for a certain output
     /// with `exp_string()` or another `ext_*` method
+    ///
+    /// Q: Why is the 10ms sleep needed?
+    /// A: Executing a command in bash causes a fork. If the Unix kernel chooses the
+    ///    parent process (bash) to go first and the bash process sends e.g. Ctrl-C then the
+    ///    Ctrl-C goes to nirvana.
+    ///    A 10ms sleep however makes the scheduler do a context switch and there is a quite
+    ///    high chance that the just executed cmd comes next (on this or on another free core)
+    ///    so when the 10ms sleep is over and the bash process is eligible for being scheduled
+    ///    in the process has already started and subsequent input is received by the process
     pub fn execute(&mut self, cmd: &str) -> Result<()> {
         self.pty_session.send_line(cmd)?;
         thread::sleep(time::Duration::from_millis(10));
