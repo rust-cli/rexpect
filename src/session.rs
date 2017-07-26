@@ -335,8 +335,11 @@ mod tests {
             p.send_control('c')?; // abort: SIGINT
             p.wait_for_prompt()?;
             p.execute("sleep 10")?;
-            p.send_control('z')?; // suspend:SIGTSTP
-            p.exp_regex(r"Stopped\s+sleep 10")?;
+            p.send_control('z')?; // suspend:SIGTSTPcon
+            p.exp_regex(r"(Stopped|suspended)\s+sleep 10")?;
+            p.send_line("fg")?;
+            p.exp_string("sleep 10")?;
+            p.send_control('c')?;
             Ok(())
         }().unwrap_or_else(|e| panic!("test_bash_control_chars failed: {}", e));
     }
