@@ -186,7 +186,6 @@ pub struct PtyBashSession {
     pty_session: PtySession,
 }
 
-/// TODO: needs an example
 impl PtyBashSession {
     pub fn wait_for_prompt(&mut self) -> Result<()> {
         self.pty_session.exp_string(&self.prompt)
@@ -233,6 +232,21 @@ impl Drop for PtyBashSession {
 }
 
 
+/// spawn bash in a pty session, run programs and expect output
+///
+/// The difference to `spawn` and `spawn_command` is:
+///
+/// - spawn_bash starts bash with a custom rcfile which guarantees
+///   a certain prompt
+/// - the PtyBashSession also provides `wait_for_prompt` and `execute`
+///
+/// bash is started with echo off. That means you don't need to "read back"
+/// what you wrote to bash. But what you need to do is a `wait_for_prompt`
+/// after a process finished.
+///
+/// Also: if you start a program you should use `execute` and not `send_line`.
+///
+/// For an example see the README
 pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyBashSession> {
     let mut c = Command::new("bash");
     c.args(&["--rcfile", BASHRC_FILE.path().to_str().unwrap_or_else(|| return "temp file does not exist".into())]);

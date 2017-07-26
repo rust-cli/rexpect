@@ -10,7 +10,7 @@
 //! - [session](session/index.html): automate stuff in Rust
 //! - [reader](reader/index.html): a non-blocking reader with buffering, matching on
 //!   strings/regex/...
-//! - [process](process/index.html): spawn a process in a tty
+//! - [process](process/index.html): spawn a process in a pty
 //!
 //! # Basic example
 //!
@@ -42,6 +42,42 @@
 //!     do_ftp().unwrap_or_else(|e| panic!("ftp job failed with {}", e));
 //! }
 //! ```
+//!
+//! # Example with bash
+//!
+//! Tip: try the chain of commands first in a bash session.
+//! The tricky thing is to get the wait_for_prompt right.
+//! What `wait_for_prompt` actually does is seeking to the next
+//! visible prompt. If you forgot to call this once your next call to
+//! `wait_for_prompt` comes out of sync and you're seeking to a prompt
+//! printed "above" the last `execute()`.
+//!
+//! ```no_run
+//! extern crate rexpect;
+//! use rexpect::spawn_bash;
+//! use rexpect::errors::*;
+//! 
+//! 
+//! fn run() -> Result<()> {
+//!     let mut p = spawn_bash(None)?;
+//!     p.execute("ping 8.8.8.8")?;
+//!     p.send_control('z')?;
+//!     p.wait_for_prompt()?;
+//!     p.execute("bg")?;
+//!     p.wait_for_prompt()?;
+//!     p.execute("sleep 1")?;
+//!     p.wait_for_prompt()?;
+//!     p.execute("fg")?;
+//!     p.send_control('c')?;
+//!     p.exp_string("packet loss")?;
+//!     Ok(())
+//! }
+//! 
+//! fn main() {
+//!     run().unwrap_or_else(|e| panic!("bash process failed with {}", e));
+//! }
+//!
+//! ```
 
 extern crate nix;
 extern crate regex;
@@ -53,7 +89,7 @@ pub mod process;
 pub mod session;
 pub mod reader;
 
-pub use session::spawn;
+pub use session::{spawn, spawn_bash};
 
 #[macro_use]
 extern crate error_chain;
