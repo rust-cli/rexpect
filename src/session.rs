@@ -64,32 +64,38 @@ impl PtySession {
     }
 
 
-    /// sends string to process. This may be buffered. You may use `flush()` after `send()`
-    /// returns number of written bytes
+    /// Send string to process. As stdin of the process is most likely buffered, you'd
+    /// need to call `flush()` after `send()` to make the process actually see your input.
     ///
-    /// TODO: method to send ^C, etc.
+    /// Returns number of written bytes
     pub fn send(&mut self, s: &str) -> Result<(usize)> {
         self.writer
             .write(s.as_bytes())
             .chain_err(|| "cannot write line to process")
     }
 
-    /// sends a control code to the running process and consumes resulting output line
+    /// Send a control code to the running process and consume resulting output line
     /// (which is empty because echo is off)
+    ///
+    /// E.g. `send_control('c')` sends ctrl-c. Upper/smaller case does not matter.
     pub fn send_control(&mut self, c: char) -> Result<()> {
         let code = match c {
-            'a' ... 'z' => c as u8 + 1 - 'a' as u8,
-            'A' ... 'Z' => c as u8 + 1 - 'A' as u8,
+            'a'...'z' => c as u8 + 1 - 'a' as u8,
+            'A'...'Z' => c as u8 + 1 - 'A' as u8,
             '[' => 27,
             '\\' => 28,
             ']' => 29,
             '^' => 30,
             '_' => 31,
-            _ => return Err(format!("I don't understand Ctrl-{}", c).into())
+            _ => return Err(format!("I don't understand Ctrl-{}", c).into()),
         };
-        self.writer.write_all(&[code]).chain_err(|| "cannot send control")?;
+        self.writer
+            .write_all(&[code])
+            .chain_err(|| "cannot send control")?;
         // stdout is line buffered, so needs a flush
-        self.writer.flush().chain_err(|| "cannot flush after sending ctrl keycode")?;
+        self.writer
+            .flush()
+            .chain_err(|| "cannot flush after sending ctrl keycode")?;
         self.read_line()?;
         Ok(())
     }
@@ -105,50 +111,79 @@ impl PtySession {
         }
     }
 
-    /// make sure all bytes written via `send()` are sent to the process
+    /// Make sure all bytes written via `send()` are sent to the process
     pub fn flush(&mut self) -> Result<()> {
         self.writer.flush().chain_err(|| "could not flush")
     }
 
-    /// read one line (blocking!) and return line including newline (\r\n for tty processes)
-    /// TODO: example on how to check for EOF
+    /// Read one line (blocking!) and return line including newline (\r\n for tty processes)
+    // TODO: example on how to check for EOF
     pub fn read_line(&mut self) -> Result<String> {
         self.exp(&ReadUntil::String('\n'.to_string()))
     }
 
+    /// Return `Some(c)` if a char is ready in the stdout stream of the process, return `None`
+    /// otherwise. This is nonblocking.
     pub fn try_read(&mut self) -> Option<char> {
         match self.exp(&ReadUntil::NBytes(1)) {
             Ok(s) => s.chars().next(),
-            Err(_) => None
+            Err(_) => None,
         }
     }
 
+    /// Wait until we see EOF (i.e. child process has terminated)
     pub fn exp_eof(&mut self) -> Result<()> {
         self.exp(&ReadUntil::EOF).and_then(|_| Ok(()))
     }
 
+    /// Wait until provided regex is seen on stdout of child process.
     pub fn exp_regex(&mut self, regex: &str) -> Result<()> {
         self.exp(&ReadUntil::Regex(Regex::new(regex).chain_err(|| "invalid regex")?))
             .and_then(|_| Ok(()))
     }
 
+    /// Wait until provided string is seen on stdout of child process.
     pub fn exp_string(&mut self, needle: &str) -> Result<()> {
         self.exp(&ReadUntil::String(needle.to_string()))
             .and_then(|_| Ok(()))
     }
 
+    /// Wait until provided char is seen on stdout of child process.
     pub fn exp_char(&mut self, needle: char) -> Result<()> {
         self.exp(&ReadUntil::String(needle.to_string()))
             .and_then(|_| Ok(()))
     }
 
+    /// Wait until any of the provided needles is found
+    ///
+    /// # Example:
+    ///
+    /// ```
+    /// use rexpect::{spawn, ReadUntil};
+    /// # use rexpect::errors::*;
+    ///
+    /// # fn main() {
+    ///     # || -> Result<()> {
+    /// let mut s = spawn("cat", None)?;
+    /// s.send_line("hello, polly!")?;
+    /// s.exp_any(vec![ReadUntil::String("hello".into()),
+    ///                ReadUntil::EOF])?;
+    ///         # Ok(())
+    ///     # }().expect("test failed");
+    /// # }
+    /// ```
     pub fn exp_any(&mut self, needles: Vec<ReadUntil>) -> Result<(String)> {
         self.exp(&ReadUntil::Any(needles))
     }
 }
 
-/// Start command in a pty session. Splits string at space and handles the rest as args
-/// see spawn_command for more documentation.
+/// Start command in background a pty session (pty fork) and return a struct
+/// with writer and buffered reader (for unblocking reads).
+///
+/// #Arguments:
+///
+/// - `program`: This is split at spaces and turned into a `process::Command`
+///   if you wish more control over this, use `spawn_command`
 pub fn spawn(program: &str, timeout: Option<u64>) -> Result<PtySession> {
     let command = if program.find(" ").is_some() {
         let mut parts = program.split(" ");
@@ -161,10 +196,7 @@ pub fn spawn(program: &str, timeout: Option<u64>) -> Result<PtySession> {
     spawn_command(command, timeout)
 }
 
-/// starts command in background in a pty session (pty fork) and return a struct
-/// with writer and buffered reader (for unblocking reads).
-///
-/// timeout: the number of milliseconds to wait at each `exp_*` command
+/// See `spawn`
 pub fn spawn_command(command: Command, timeout: Option<u64>) -> Result<PtySession> {
     let commandname = format!("{:?}", &command);
     let process = PtyProcess::new(command)
@@ -181,6 +213,7 @@ pub fn spawn_command(command: Command, timeout: Option<u64>) -> Result<PtySessio
        })
 }
 
+/// Interact with a bash shell: execute programs, interact with ctrl-z, bg, etc.
 pub struct PtyBashSession {
     prompt: String,
     pty_session: PtySession,
@@ -216,23 +249,29 @@ impl PtyBashSession {
 // make PtySession's methods available directly
 impl Deref for PtyBashSession {
     type Target = PtySession;
-    fn deref(&self) -> &PtySession { &self.pty_session }
+    fn deref(&self) -> &PtySession {
+        &self.pty_session
+    }
 }
 
 impl DerefMut for PtyBashSession {
-    fn deref_mut(&mut self) -> &mut PtySession { &mut self.pty_session }
+    fn deref_mut(&mut self) -> &mut PtySession {
+        &mut self.pty_session
+    }
 }
 
 impl Drop for PtyBashSession {
     fn drop(&mut self) {
         // if we leave that out, PtyProcess would try to kill the bash
         // which would not work, as a SIGTERM is not enough to kill bash
-        self.pty_session.send_line("exit").expect("could not run `exit` on bash process");
+        self.pty_session
+            .send_line("exit")
+            .expect("could not run `exit` on bash process");
     }
 }
 
 
-/// spawn bash in a pty session, run programs and expect output
+/// Spawn bash in a pty session, run programs and expect output
 ///
 /// The difference to `spawn` and `spawn_command` is:
 ///
@@ -249,12 +288,19 @@ impl Drop for PtyBashSession {
 /// For an example see the README
 pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyBashSession> {
     let mut c = Command::new("bash");
-    c.args(&["--rcfile", BASHRC_FILE.path().to_str().unwrap_or_else(|| return "temp file does not exist".into())]);
+    c.args(&["--rcfile",
+             BASHRC_FILE
+                 .path()
+                 .to_str()
+                 .unwrap_or_else(|| return "temp file does not exist".into())]);
     spawn_command(c, timeout).and_then(|mut p| {
         p.exp_char('$')?; // waiting for prompt
         let new_prompt = "[REXPECT_PROMPT>";
         p.send_line(&("PS1='".to_string() + new_prompt + "'"))?;
-        let mut pb = PtyBashSession { prompt: new_prompt.to_string(), pty_session: p };
+        let mut pb = PtyBashSession {
+            prompt: new_prompt.to_string(),
+            pty_session: p,
+        };
         // PS1 does print another prompt, consume that as well
         pb.wait_for_prompt()?;
         Ok(pb)
@@ -338,7 +384,8 @@ mod tests {
             p.send_line("pwd")?;
             assert_eq!("/tmp\r\n", p.read_line()?);
             Ok(())
-        }().unwrap_or_else(|e| panic!("test_bash failed: {}", e));
+        }()
+                .unwrap_or_else(|e| panic!("test_bash failed: {}", e));
     }
 
     #[test]
@@ -355,6 +402,7 @@ mod tests {
             p.exp_string("sleep 10")?;
             p.send_control('c')?;
             Ok(())
-        }().unwrap_or_else(|e| panic!("test_bash_control_chars failed: {}", e));
+        }()
+                .unwrap_or_else(|e| panic!("test_bash_control_chars failed: {}", e));
     }
 }

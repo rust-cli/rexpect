@@ -56,8 +56,8 @@
 //! extern crate rexpect;
 //! use rexpect::spawn_bash;
 //! use rexpect::errors::*;
-//! 
-//! 
+//!
+//!
 //! fn run() -> Result<()> {
 //!     let mut p = spawn_bash(None)?;
 //!     p.execute("ping 8.8.8.8")?;
@@ -72,7 +72,7 @@
 //!     p.exp_string("packet loss")?;
 //!     Ok(())
 //! }
-//! 
+//!
 //! fn main() {
 //!     run().unwrap_or_else(|e| panic!("bash process failed with {}", e));
 //! }
@@ -90,6 +90,7 @@ pub mod session;
 pub mod reader;
 
 pub use session::{spawn, spawn_bash};
+pub use reader::ReadUntil;
 
 #[macro_use]
 extern crate error_chain;

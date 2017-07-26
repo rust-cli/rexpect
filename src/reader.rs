@@ -1,3 +1,4 @@
+//! Unblocking reader which supports waiting for strings/regexes and EOF to be present
 
 use std::io::{self, BufReader};
 use std::io::prelude::*;
@@ -91,9 +92,6 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<usize> {
 /// Typically you'd need that to check for output of a process without blocking your thread.
 /// Internally a thread is spawned and the output is read ahead so when
 /// calling `read_line` or `read_until` it reads from an internal buffer
-///
-/// TODO: method to "check" for output
-/// TODO: way of providing a timeout
 pub struct NBReader {
     reader: Receiver<result::Result<PipedChar, PipeError>>,
     buffer: String,
@@ -104,10 +102,12 @@ pub struct NBReader {
 impl NBReader {
     /// Create a new reader instance
     ///
-    /// f: file like object
-    /// timeout:
-    /// - None: read_until is blocking forever. This is probably not what you want
-    /// - Some(millis): after millis millisecons a timeout error is raised
+    /// # Arguments:
+    ///
+    /// - f: file like object
+    /// - timeout:
+    ///  + `None`: read_until is blocking forever. This is probably not what you want
+    ///  + `Some(millis)`: after millis millisecons a timeout error is raised
     pub fn new<R: Read + Send + 'static>(f: R, timeout: Option<u64>) -> NBReader {
         let (tx, rx) = channel();
 

@@ -16,7 +16,7 @@ pub use nix::sys::{wait, signal};
 use errors::*; // load error-chain
 
 
-/// Starts a process in a forked tty so you can interact with it the same as you would
+/// Start a process in a forked tty so you can interact with it the same as you would
 /// within a terminal
 ///
 /// The process and pty session are killed upon dropping PtyProcess
@@ -88,6 +88,7 @@ fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
 }
 
 impl PtyProcess {
+    /// Start a process in a forked pty
     pub fn new(mut command: Command) -> Result<Self> {
         || -> nix::Result<Self> {
             // Open a new PTY master
@@ -131,6 +132,9 @@ impl PtyProcess {
                 .chain_err(|| format!("could not execute {:?}", command))
     }
 
+    /// Get handle to pty fork for reading/writing
+    ///
+    ///
     pub fn get_file_handle(&self) -> File {
         // needed because otherwise fd is closed both by dropping process and reader/writer
         let fd = dup(self.pty.as_raw_fd()).unwrap();
@@ -174,32 +178,34 @@ impl PtyProcess {
         wait::waitpid(self.child_pid, None).chain_err(|| "wait: cannot read status")
     }
 
-    /// regularly exit the process, this method is blocking until the process is dead
+    /// Regularly exit the process, this method is blocking until the process is dead
     pub fn exit(&mut self) -> Result<wait::WaitStatus> {
         self.kill(signal::SIGTERM)
     }
 
-    /// nonblocking variant of `kill()` (doesn't wait for process to be killed)
+    /// Nonblocking variant of `kill()` (doesn't wait for process to be killed)
     pub fn signal(&mut self, sig: signal::Signal) -> Result<()> {
         signal::kill(self.child_pid, sig)
             .chain_err(|| "failed to send signal to process")?;
         Ok(())
     }
 
-    /// kills the process with a specific signal. This method blocks, until the process is dead
+    /// Kill the process with a specific signal. This method blocks, until the process is dead
     ///
     /// repeatedly sends SIGTERM to the process until it died,
     /// the pty session is closed upon dropping PtyMaster,
     /// so we don't need to explicitely do that here.
     ///
-    /// TODO: this needs some way of timeout before we send a kill -9
+    // TODO: this needs some way of timeout before we send a kill -9
     pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus> {
         loop {
             match signal::kill(self.child_pid, sig) {
-                Ok(_) => {},
+                Ok(_) => {}
                 // process was already killed before -> ignore
-                Err(nix::Error::Sys(nix::Errno::ESRCH)) => {return Ok(wait::WaitStatus::Exited(Pid::from_raw(0),0))}
-                Err(e) => return Err(format!("kill resulted in error: {:?}", e).into())
+                Err(nix::Error::Sys(nix::Errno::ESRCH)) => {
+                    return Ok(wait::WaitStatus::Exited(Pid::from_raw(0), 0))
+                }
+                Err(e) => return Err(format!("kill resulted in error: {:?}", e).into()),
             }
 
 
@@ -225,10 +231,8 @@ impl Drop for PtyProcess {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
     use std::io::{BufReader, LineWriter};
     use nix::sys::{wait, signal};
-    use std::os::unix::io::{FromRawFd, AsRawFd};
     use std::io::prelude::*;
 
     #[test]
@@ -237,9 +241,7 @@ mod tests {
         // wrapping into closure so I can use ?
         || -> std::io::Result<()> {
             let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
-            // needed because otherwise fd is closed both by dropping process and f
-            let fd = dup(process.pty.as_raw_fd()).unwrap();
-            let f = unsafe { File::from_raw_fd(fd) };
+            let f = process.get_file_handle();
             let mut writer = LineWriter::new(&f);
             let mut reader = BufReader::new(&f);
             writer.write(b"hello cat\n")?;
@@ -257,6 +259,6 @@ mod tests {
             assert_eq!(should, wait::waitpid(process.child_pid, None).unwrap());
             Ok(())
         }()
-            .unwrap_or_else(|e| panic!("test_cat failed: {}", e));
+                .unwrap_or_else(|e| panic!("test_cat failed: {}", e));
     }
 }
