@@ -3,13 +3,14 @@
 use process::PtyProcess;
 use reader::{NBReader, Regex};
 pub use reader::ReadUntil;
-use std::env;
-use std::fs::{File, remove_file};
+use std::fs::File;
 use std::io::LineWriter;
 use std::process::Command;
 use std::io::prelude::*;
 use std::ops::{Deref, DerefMut};
+use std::{time, thread};
 use errors::*; // load error-chain
+use tempfile;
 
 /// Interact with a process with read/write/signals, etc.
 #[allow(dead_code)]
@@ -18,6 +19,16 @@ pub struct PtySession {
     writer: LineWriter<File>,
     reader: NBReader,
     commandname: String, // only for debugging purposes now
+}
+
+lazy_static! {
+    static ref BASHRC_FILE: tempfile::NamedTempFile = {
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        f.write(b"source /etc/bash.bashrc\n\
+                  source ~/.bashrc\n\
+                  PS1=\"$\"\n").expect("cannot write to tmpfile");
+        f
+    };
 }
 
 /// Start a process in a tty session, write and read from it
@@ -63,6 +74,26 @@ impl PtySession {
             .chain_err(|| "cannot write line to process")
     }
 
+    /// sends a control code to the running process and consumes resulting output line
+    /// (which is empty because echo is off)
+    pub fn send_control(&mut self, c: char) -> Result<()> {
+        let code = match c {
+            'a' ... 'z' => c as u8 + 1 - 'a' as u8,
+            'A' ... 'Z' => c as u8 + 1 - 'A' as u8,
+            '[' => 27,
+            '\\' => 28,
+            ']' => 29,
+            '^' => 30,
+            '_' => 31,
+            _ => return Err(format!("I don't understand Ctrl-{}", c).into())
+        };
+        self.writer.write_all(&[code]).chain_err(|| "cannot send control")?;
+        // stdout is line buffered, so needs a flush
+        self.writer.flush().chain_err(|| "cannot flush after sending ctrl keycode")?;
+        self.read_line()?;
+        Ok(())
+    }
+
     // wrapper around reader::read_until to give more context for errors
     fn exp(&mut self, needle: &ReadUntil) -> Result<String> {
         match self.reader.read_until(needle) {
@@ -83,6 +114,13 @@ impl PtySession {
     /// TODO: example on how to check for EOF
     pub fn read_line(&mut self) -> Result<String> {
         self.exp(&ReadUntil::String('\n'.to_string()))
+    }
+
+    pub fn try_read(&mut self) -> Option<char> {
+        match self.exp(&ReadUntil::NBytes(1)) {
+            Ok(s) => s.chars().next(),
+            Err(_) => None
+        }
     }
 
     pub fn exp_eof(&mut self) -> Result<()> {
@@ -149,8 +187,18 @@ pub struct PtyBashSession {
 }
 
 impl PtyBashSession {
-    fn wait_for_prompt(&mut self) -> Result<()> {
+    pub fn wait_for_prompt(&mut self) -> Result<()> {
         self.pty_session.exp_string(&self.prompt)
+    }
+
+    /// sends cmd to bash and waits 10ms to let the scheduler run the command
+    /// caution: there is no guarantee that after the 10ms the command is actually started!
+    /// to be sure that the startup time of cmd is over you best wait for a certain output
+    /// with `exp_string()` or another `ext_*` method
+    pub fn execute(&mut self, cmd: &str) -> Result<()> {
+        self.pty_session.send_line(cmd)?;
+        thread::sleep(time::Duration::from_millis(10));
+        Ok(())
     }
 }
 
@@ -174,21 +222,12 @@ impl Drop for PtyBashSession {
 
 
 pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyBashSession> {
-    let mut dir = env::temp_dir();
-    dir.push("rexpext_bashrc.sh");
-    {
-        let mut f = File::create(&dir).chain_err(|| "cannot create bashrc temp file")?;
-        f.write(b"source /etc/bash.bashrc\n\
-                  source ~/.bashrc\n\
-                  PS1=\"$\"\n").chain_err(|| "cannot write to tmpfile")?;
-    }
     let mut c = Command::new("bash");
-    c.args(&["--rcfile", dir.to_str().unwrap()]);
+    c.args(&["--rcfile", BASHRC_FILE.path().to_str().unwrap_or_else(|| return "temp file does not exist".into())]);
     spawn_command(c, timeout).and_then(|mut p| {
         p.exp_char('$')?; // waiting for prompt
         let new_prompt = "[REXPECT_PROMPT>";
         p.send_line(&("PS1='".to_string() + new_prompt + "'"))?;
-        remove_file(dir).chain_err(|| "cannot remove tmpfile")?;
         let mut pb = PtyBashSession { prompt: new_prompt.to_string(), pty_session: p };
         // PS1 does print another prompt, consume that as well
         pb.wait_for_prompt()?;
@@ -274,5 +313,21 @@ mod tests {
             assert_eq!("/tmp\r\n", p.read_line()?);
             Ok(())
         }().unwrap_or_else(|e| panic!("test_bash failed: {}", e));
+    }
+
+    #[test]
+    fn test_bash_control_chars() {
+        || -> Result<()> {
+            let mut p = spawn_bash(None)?;
+            p.execute("sleep 10")?;
+            p.send_control('z')?; // SIGINT
+            println!("{}", p.read_line()?);
+//            assert_eq!("^C\r\n", p.read_line()?);
+//            p.wait_for_prompt()?;
+//            p.send_line("echo $HOME")?;
+//            p.send_control('z')?; // SUSPEND
+//            println!("{}", p.read_line()?);
+            Ok(())
+        }().unwrap_or_else(|e| panic!("test_bash_control_chars failed: {}", e));
     }
 }
