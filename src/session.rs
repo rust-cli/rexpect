@@ -332,13 +332,11 @@ mod tests {
         || -> Result<()> {
             let mut p = spawn_bash(None)?;
             p.execute("sleep 10")?;
-            p.send_control('z')?; // SIGINT
-            println!("{}", p.read_line()?);
-//            assert_eq!("^C\r\n", p.read_line()?);
-//            p.wait_for_prompt()?;
-//            p.send_line("echo $HOME")?;
-//            p.send_control('z')?; // SUSPEND
-//            println!("{}", p.read_line()?);
+            p.send_control('c')?; // abort: SIGINT
+            p.wait_for_prompt()?;
+            p.execute("sleep 10")?;
+            p.send_control('z')?; // suspend:SIGTSTP
+            p.exp_regex(r"Stopped\s+sleep 10")?;
             Ok(())
         }().unwrap_or_else(|e| panic!("test_bash_control_chars failed: {}", e));
     }
