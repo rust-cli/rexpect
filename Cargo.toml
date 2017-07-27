@@ -1,5 +1,5 @@
 [package]
-description = "mimicks python's pexpect"
+description = "Interact with unix processes/bash the same way as pexpect or Don libes expect does"
 name = "rexpect"
 version = "0.1.0"
 authors = ["Philipp Keller <philipp.keller@gmail.com>"]
