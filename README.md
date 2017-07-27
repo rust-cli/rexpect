@@ -6,11 +6,11 @@ The goal is to offer a similar set of functionality as [pexpect](https://pexpect
 
 # Basic usage
 
-Add this to your `Cargo.toml` (sorry, not posted to crates.io yet)
+Add this to your `Cargo.toml`
 
 ```toml
 [dependencies]
-rexpect = {git = "https://github.com/philippkeller/rexpect"}
+rexpect = "0.1"
 ```
 
 Simple example for interacting via ftp:
