@@ -4,7 +4,12 @@ name        = "rexpect"
 version     = "0.1.0"
 authors     = ["Philipp Keller <philipp.keller@gmail.com>"]
 repository  = "https://github.com/philippkeller/rexpect"
+homepage    = "https://github.com/philippkeller/rexpect"
 license     = "MIT"
+categories  = ["os::unix-apis"]
+keywords    = ["pty", "tty", "automation", "testing", "expect", "pexpect"]
+readme      = "README.md"
+
 
 
 [dependencies]
@@ -13,3 +18,6 @@ regex = "0.2"
 error-chain = "0.10"
 tempfile = "2"
 lazy_static = "0.2"
+
+[badges]
+travis-ci = { repository = "philippkeller/rexpect" }
