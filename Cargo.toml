@@ -7,7 +7,7 @@ repository  = "https://github.com/philippkeller/rexpect"
 homepage    = "https://github.com/philippkeller/rexpect"
 license     = "MIT"
 categories  = ["os::unix-apis"]
-keywords    = ["pty", "tty", "automation", "testing", "expect", "pexpect"]
+keywords    = ["pty", "automation", "testing", "expect", "pexpect"]
 readme      = "README.md"
 
 
