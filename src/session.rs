@@ -15,10 +15,10 @@ use tempfile;
 /// Interact with a process with read/write/signals, etc.
 #[allow(dead_code)]
 pub struct PtySession {
-    process: PtyProcess,
-    writer: LineWriter<File>,
-    reader: NBReader,
-    commandname: String, // only for debugging purposes now
+    pub process: PtyProcess,
+    pub writer: LineWriter<File>,
+    pub reader: NBReader,
+    pub commandname: String, // only for debugging purposes now
 }
 
 lazy_static! {
