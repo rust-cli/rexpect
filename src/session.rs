@@ -24,8 +24,9 @@ pub struct PtySession {
 lazy_static! {
     static ref BASHRC_FILE: tempfile::NamedTempFile = {
         let mut f = tempfile::NamedTempFile::new().unwrap();
-        f.write(b"source /etc/bash.bashrc\n\
-                  source ~/.bashrc\n\
+        f.write(b"include () { [[ -f \"$1\" ]] && source \"$1\" }\n\
+                  include /etc/bash.bashrc\n\
+                  include ~/.bashrc\n\
                   PS1=\"$\"\n").expect("cannot write to tmpfile");
         f
     };
