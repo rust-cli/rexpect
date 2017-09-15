@@ -133,26 +133,32 @@ impl PtySession {
     }
 
     /// Wait until we see EOF (i.e. child process has terminated)
-    pub fn exp_eof(&mut self) -> Result<()> {
-        self.exp(&ReadUntil::EOF).and_then(|_| Ok(()))
+    /// Return all the yet unread output
+    pub fn exp_eof(&mut self) -> Result<String> {
+        self.exp(&ReadUntil::EOF).and_then(|s| Ok(s))
     }
 
     /// Wait until provided regex is seen on stdout of child process.
-    pub fn exp_regex(&mut self, regex: &str) -> Result<()> {
-        self.exp(&ReadUntil::Regex(Regex::new(regex).chain_err(|| "invalid regex")?))
-            .and_then(|_| Ok(()))
+    /// Return the yet unread output including the matched regex
+    pub fn exp_regex(&mut self, regex: &str) -> Result<String> {
+        let res = self.exp(&ReadUntil::Regex(Regex::new(regex).chain_err(|| "invalid regex")?))
+            .and_then(|s| Ok(s));
+        println!("exp_regex finished");
+        res
     }
 
     /// Wait until provided string is seen on stdout of child process.
-    pub fn exp_string(&mut self, needle: &str) -> Result<()> {
+    /// Return the yet unread output including the matched string
+    pub fn exp_string(&mut self, needle: &str) -> Result<(String)> {
         self.exp(&ReadUntil::String(needle.to_string()))
-            .and_then(|_| Ok(()))
+            .and_then(|s| Ok(s))
     }
 
     /// Wait until provided char is seen on stdout of child process.
-    pub fn exp_char(&mut self, needle: char) -> Result<()> {
+    /// Return the yet unread output including the matched char
+    pub fn exp_char(&mut self, needle: char) -> Result<String> {
         self.exp(&ReadUntil::String(needle.to_string()))
-            .and_then(|_| Ok(()))
+            .and_then(|s| Ok(s))
     }
 
     /// Wait until any of the provided needles is found
@@ -221,7 +227,7 @@ pub struct PtyBashSession {
 }
 
 impl PtyBashSession {
-    pub fn wait_for_prompt(&mut self) -> Result<()> {
+    pub fn wait_for_prompt(&mut self) -> Result<String> {
         self.pty_session.exp_string(&self.prompt)
     }
 
@@ -360,6 +366,16 @@ mod tests {
             Ok(())
         }()
                 .unwrap_or_else(|e| panic!("test_expect_string failed: {}", e));
+    }
+
+    #[test]
+    fn test_read_string_before() {
+        || -> Result<()> {
+            let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
+            p.send_line("lorem ipsum dolor sit amet")?;
+            assert_eq!("lorem ipsum dolor sit amet", p.exp_string("amet")?);
+            Ok(())
+        }().unwrap_or_else(|e| panic!("test_read_string_before failed: {}", e));
     }
 
     #[test]
