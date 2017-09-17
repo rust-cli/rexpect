@@ -46,7 +46,7 @@ lazy_static! {
 /// let mut s = spawn("cat", None)?;
 /// s.send_line("hello, polly!")?;
 /// let line = s.read_line()?;
-/// assert_eq!("hello, polly!\r\n", line);
+/// assert_eq!("hello, polly!", line);
 ///         # Ok(())
 ///     # }().expect("test failed");
 /// # }
@@ -102,7 +102,7 @@ impl PtySession {
     }
 
     // wrapper around reader::read_until to give more context for errors
-    fn exp(&mut self, needle: &ReadUntil) -> Result<String> {
+    fn exp(&mut self, needle: &ReadUntil) -> Result<(String, String)> {
         match self.reader.read_until(needle) {
             Ok(s) => Ok(s),
             Err(Error(ErrorKind::EOF(expected, got, _), _)) => {
@@ -117,17 +117,25 @@ impl PtySession {
         self.writer.flush().chain_err(|| "could not flush")
     }
 
-    /// Read one line (blocking!) and return line including newline (\r\n for tty processes)
-    // TODO: example on how to check for EOF
+    /// Read one line (blocking!) and return line without the newline
+    /// (waits until \n is in the output fetches the line and removes \r at the end if present)
     pub fn read_line(&mut self) -> Result<String> {
-        self.exp(&ReadUntil::String('\n'.to_string()))
+        match self.exp(&ReadUntil::String('\n'.to_string())) {
+            Ok((mut line, _)) => {
+                if line.ends_with('\r') {
+                    line.pop().expect("this never happens");
+                }
+                Ok(line)
+            },
+            Err(e) => Err(e),
+        }
     }
 
     /// Return `Some(c)` if a char is ready in the stdout stream of the process, return `None`
     /// otherwise. This is nonblocking.
     pub fn try_read(&mut self) -> Option<char> {
         match self.exp(&ReadUntil::NBytes(1)) {
-            Ok(s) => s.chars().next(),
+            Ok((_, s)) => s.chars().next(),
             Err(_) => None,
         }
     }
@@ -135,30 +143,31 @@ impl PtySession {
     /// Wait until we see EOF (i.e. child process has terminated)
     /// Return all the yet unread output
     pub fn exp_eof(&mut self) -> Result<String> {
-        self.exp(&ReadUntil::EOF).and_then(|s| Ok(s))
+        self.exp(&ReadUntil::EOF).and_then(|(_, s)| Ok(s))
     }
 
     /// Wait until provided regex is seen on stdout of child process.
-    /// Return the yet unread output including the matched regex
-    pub fn exp_regex(&mut self, regex: &str) -> Result<String> {
+    /// Return a tuple:
+    /// 1. the yet unread output
+    /// 2. the matched regex
+    pub fn exp_regex(&mut self, regex: &str) -> Result<(String, String)> {
         let res = self.exp(&ReadUntil::Regex(Regex::new(regex).chain_err(|| "invalid regex")?))
             .and_then(|s| Ok(s));
-        println!("exp_regex finished");
         res
     }
 
     /// Wait until provided string is seen on stdout of child process.
-    /// Return the yet unread output including the matched string
+    /// Return the yet unread output (without the matched string)
     pub fn exp_string(&mut self, needle: &str) -> Result<(String)> {
         self.exp(&ReadUntil::String(needle.to_string()))
-            .and_then(|s| Ok(s))
+            .and_then(|(s, _)| Ok(s))
     }
 
     /// Wait until provided char is seen on stdout of child process.
-    /// Return the yet unread output including the matched char
+    /// Return the yet unread output (without the matched char)
     pub fn exp_char(&mut self, needle: char) -> Result<String> {
         self.exp(&ReadUntil::String(needle.to_string()))
-            .and_then(|s| Ok(s))
+            .and_then(|(s, _)| Ok(s))
     }
 
     /// Wait until any of the provided needles is found
@@ -179,7 +188,7 @@ impl PtySession {
     ///     # }().expect("test failed");
     /// # }
     /// ```
-    pub fn exp_any(&mut self, needles: Vec<ReadUntil>) -> Result<(String)> {
+    pub fn exp_any(&mut self, needles: Vec<ReadUntil>) -> Result<(String, String)> {
         self.exp(&ReadUntil::Any(needles))
     }
 }
@@ -323,7 +332,7 @@ mod tests {
         || -> Result<()> {
             let mut s = spawn("cat", None)?;
             s.send_line("hans")?;
-            assert_eq!("hans\r\n", s.read_line()?);
+            assert_eq!("hans", s.read_line()?);
             let should = ::process::wait::WaitStatus::Signaled(s.process.child_pid,
                                                                ::process::signal::Signal::SIGTERM,
                                                                false);
@@ -373,7 +382,7 @@ mod tests {
         || -> Result<()> {
             let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
             p.send_line("lorem ipsum dolor sit amet")?;
-            assert_eq!("lorem ipsum dolor sit amet", p.exp_string("amet")?);
+            assert_eq!("lorem ipsum dolor sit ", p.exp_string("amet")?);
             Ok(())
         }().unwrap_or_else(|e| panic!("test_read_string_before failed: {}", e));
     }
@@ -384,7 +393,7 @@ mod tests {
             let mut p = spawn("cat", None).expect("cannot run cat");
             p.send_line("Hi")?;
             match p.exp_any(vec![ReadUntil::NBytes(3), ReadUntil::String("Hi".to_string())]) {
-                Ok(s) => assert_eq!("Hi\r", s),
+                Ok(s) => assert_eq!(("".to_string(), "Hi\r".to_string()), s),
                 Err(e) => assert!(false, format!("got error: {}", e)),
             }
             Ok(())
@@ -399,7 +408,7 @@ mod tests {
             p.send_line("cd /tmp/")?;
             p.wait_for_prompt()?;
             p.send_line("pwd")?;
-            assert_eq!("/tmp\r\n", p.read_line()?);
+            assert_eq!("/tmp", p.read_line()?);
             Ok(())
         }()
                 .unwrap_or_else(|e| panic!("test_bash failed: {}", e));

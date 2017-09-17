@@ -1,7 +1,7 @@
 [package]
 description = "Interact with unix processes/bash the same way as pexpect or Don libes expect does"
 name        = "rexpect"
-version     = "0.1.1"
+version     = "0.2.0"
 authors     = ["Philipp Keller <philipp.keller@gmail.com>"]
 repository  = "https://github.com/philippkeller/rexpect"
 homepage    = "https://github.com/philippkeller/rexpect"

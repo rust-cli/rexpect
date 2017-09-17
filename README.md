@@ -83,8 +83,7 @@ What already works:
 
 What does not yet work:
 
-- other repls as python are not implemented yet
-- getting specific output (e.g. matching with regex and fetching the match) is missing
+- other repls such as python are not implemented yet
 
 What will probably never be implemented
 
