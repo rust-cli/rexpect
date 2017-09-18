@@ -24,7 +24,7 @@ pub struct PtySession {
 lazy_static! {
     static ref BASHRC_FILE: tempfile::NamedTempFile = {
         let mut f = tempfile::NamedTempFile::new().unwrap();
-        f.write(b"include () { [[ -f \"$1\" ]] && source \"$1\" }\n\
+        f.write(b"include () { [[ -f \"$1\" ]] && source \"$1\"; }\n\
                   include /etc/bash.bashrc\n\
                   include ~/.bashrc\n\
                   PS1=\"$\"\n").expect("cannot write to tmpfile");
@@ -170,7 +170,11 @@ impl PtySession {
             .and_then(|(s, _)| Ok(s))
     }
 
-    /// Wait until any of the provided needles is found
+    /// Wait until any of the provided needles is found.
+    ///
+    /// Return a tuple with:
+    /// 1. the yet unread string, without the matching needle (empty in case of EOF and NBytes)
+    /// 2. the matched string
     ///
     /// # Example:
     ///
@@ -193,7 +197,7 @@ impl PtySession {
     }
 }
 
-/// Start command in background a pty session (pty fork) and return a struct
+/// Start command in background in a pty session (pty fork) and return a struct
 /// with writer and buffered reader (for unblocking reads).
 ///
 /// #Arguments:
