@@ -114,7 +114,7 @@ impl PtySession {
                     line.pop().expect("this never happens");
                 }
                 Ok(line)
-            },
+            }
             Err(e) => Err(e),
         }
     }
@@ -373,7 +373,8 @@ mod tests {
             p.send_line("lorem ipsum dolor sit amet")?;
             assert_eq!("lorem ipsum dolor sit ", p.exp_string("amet")?);
             Ok(())
-        }().unwrap_or_else(|e| panic!("test_read_string_before failed: {}", e));
+        }()
+                .unwrap_or_else(|e| panic!("test_read_string_before failed: {}", e));
     }
 
     #[test]

@@ -288,16 +288,20 @@ mod tests {
         let mut r = NBReader::new(f, None);
         let re = Regex::new(r"-\d{2}-").unwrap();
         assert_eq!(("2014".to_string(), "-03-".to_string()),
-            r.read_until(&ReadUntil::Regex(re)).expect("regex doesn't match"));
+                   r.read_until(&ReadUntil::Regex(re))
+                       .expect("regex doesn't match"));
     }
 
     #[test]
     fn test_nbytes() {
         let f = io::Cursor::new("abcdef");
         let mut r = NBReader::new(f, None);
-        assert_eq!(("".to_string(), "ab".to_string()), r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes"));
-        assert_eq!(("".to_string(), "cde".to_string()), r.read_until(&ReadUntil::NBytes(3)).expect("3 bytes"));
-        assert_eq!(("".to_string(), "f".to_string()), r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes"));
+        assert_eq!(("".to_string(), "ab".to_string()),
+                   r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes"));
+        assert_eq!(("".to_string(), "cde".to_string()),
+                   r.read_until(&ReadUntil::NBytes(3)).expect("3 bytes"));
+        assert_eq!(("".to_string(), "f".to_string()),
+                   r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes"));
     }
 
     #[test]
@@ -305,7 +309,8 @@ mod tests {
         let f = io::Cursor::new("lorem ipsum dolor sit amet");
         let mut r = NBReader::new(f, None);
         r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes");
-        assert_eq!(("".to_string(), "rem ipsum dolor sit amet".to_string()), r.read_until(&ReadUntil::EOF).expect("reading until EOF"));
+        assert_eq!(("".to_string(), "rem ipsum dolor sit amet".to_string()),
+                   r.read_until(&ReadUntil::EOF).expect("reading until EOF"));
     }
 
 }
