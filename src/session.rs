@@ -10,7 +10,6 @@ use std::io::prelude::*;
 use std::ops::{Deref, DerefMut};
 use std::{time, thread};
 use errors::*; // load error-chain
-use tempfile;
 
 /// Interact with a process with read/write/signals, etc.
 #[allow(dead_code)]
@@ -19,17 +18,6 @@ pub struct PtySession {
     pub writer: LineWriter<File>,
     pub reader: NBReader,
     pub commandname: String, // only for debugging purposes now
-}
-
-lazy_static! {
-    static ref BASHRC_FILE: tempfile::NamedTempFile = {
-        let mut f = tempfile::NamedTempFile::new().unwrap();
-        f.write(b"include () { [[ -f \"$1\" ]] && source \"$1\"; }\n\
-                  include /etc/bash.bashrc\n\
-                  include ~/.bashrc\n\
-                  PS1=\"$\"\n").expect("cannot write to tmpfile");
-        f
-    };
 }
 
 /// Start a process in a tty session, write and read from it
@@ -307,21 +295,18 @@ impl Drop for PtyBashSession {
 ///
 /// For an example see the README
 pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyBashSession> {
-    let mut c = Command::new("bash");
-    c.args(&["--rcfile",
-             BASHRC_FILE
-                 .path()
-                 .to_str()
-                 .unwrap_or_else(|| return "temp file does not exist".into())]);
-    spawn_command(c, timeout).and_then(|mut p| {
-        p.exp_char('$')?; // waiting for prompt
+    spawn_command(Command::new("bash"), timeout).and_then(|mut p| {
+        // pexpect starts bash with --rcfile and a temporary
+        // file stored in the filesystem. I don't see why this would be needed
+        // and temporary files cause a lot of troubles. So we just start bash
+        // regularly here and set the prompt with the first command.
         let new_prompt = "[REXPECT_PROMPT>";
         p.send_line(&("PS1='".to_string() + new_prompt + "'"))?;
         let mut pb = PtyBashSession {
             prompt: new_prompt.to_string(),
             pty_session: p,
         };
-        // PS1 does print another prompt, consume that as well
+        // wait until the new prompt appears
         pb.wait_for_prompt()?;
         Ok(pb)
     })

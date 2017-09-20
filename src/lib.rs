@@ -81,9 +81,6 @@
 
 extern crate nix;
 extern crate regex;
-extern crate tempfile;
-#[macro_use]
-extern crate lazy_static;
 
 pub mod process;
 pub mod session;
