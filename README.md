@@ -12,7 +12,7 @@ Add this to your `Cargo.toml`
 
 ```toml
 [dependencies]
-rexpect = "0.1"
+rexpect = "0.2"
 ```
 
 Simple example for interacting via ftp:
