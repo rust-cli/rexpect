@@ -16,3 +16,4 @@ All `exp_*` methods now also return the yet unread string and/or the matched str
 ### Fixed
 
 - each execution of rexpect left a temporary file in /tmp/ this is now no longer the case
+- try_read was blocking when there was no char ready (!) -> fixed
