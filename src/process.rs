@@ -150,7 +150,6 @@ impl PtyProcess {
     /// # Example
     /// ```rust,no_run
     ///
-    /// # extern crate nix;
     /// # extern crate rexpect;
     /// use rexpect::process;
     /// use std::process::Command;

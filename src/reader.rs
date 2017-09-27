@@ -252,6 +252,18 @@ impl NBReader {
             thread::sleep(time::Duration::from_millis(100));
         }
     }
+
+    /// Try to read one char from internal buffer. Returns None if
+    /// no char is ready, Some(char) otherwise. This is nonblocking
+    pub fn try_read(&mut self) -> Option<char> {
+        // discard eventual errors, EOF will be handled in read_until correctly
+        let _ = self.read_into_buffer();
+        if self.buffer.len() > 0 {
+            self.buffer.drain(..1).last()
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -311,6 +323,18 @@ mod tests {
         r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes");
         assert_eq!(("".to_string(), "rem ipsum dolor sit amet".to_string()),
                    r.read_until(&ReadUntil::EOF).expect("reading until EOF"));
+    }
+
+    #[test]
+    fn test_try_read() {
+        let f = io::Cursor::new("lorem");
+        let mut r = NBReader::new(f, None);
+        r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes");
+        assert_eq!(Some('m'), r.try_read());
+        assert_eq!(None, r.try_read());
+        assert_eq!(None, r.try_read());
+        assert_eq!(None, r.try_read());
+        assert_eq!(None, r.try_read());
     }
 
 }

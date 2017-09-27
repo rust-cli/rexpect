@@ -10,6 +10,7 @@ use std::io::prelude::*;
 use std::ops::{Deref, DerefMut};
 use std::{time, thread};
 use errors::*; // load error-chain
+use tempfile;
 
 /// Interact with a process with read/write/signals, etc.
 #[allow(dead_code)]
@@ -122,10 +123,7 @@ impl PtySession {
     /// Return `Some(c)` if a char is ready in the stdout stream of the process, return `None`
     /// otherwise. This is nonblocking.
     pub fn try_read(&mut self) -> Option<char> {
-        match self.exp(&ReadUntil::NBytes(1)) {
-            Ok((_, s)) => s.chars().next(),
-            Err(_) => None,
-        }
+        self.reader.try_read()
     }
 
     /// Wait until we see EOF (i.e. child process has terminated)
@@ -295,17 +293,28 @@ impl Drop for PtyBashSession {
 ///
 /// For an example see the README
 pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyBashSession> {
-    spawn_command(Command::new("bash"), timeout).and_then(|mut p| {
-        // pexpect starts bash with --rcfile and a temporary
-        // file stored in the filesystem. I don't see why this would be needed
-        // and temporary files cause a lot of troubles. So we just start bash
-        // regularly here and set the prompt with the first command.
+    // unfortunately working with a temporary tmpfile is the only
+    // way to guarantee that we are "in step" with the prompt
+    // all other attempts were futile, especially since we cannot
+    // wait for the first prompt since we don't know what .bashrc
+    // would set as PS1 and we cannot know when is the right time
+    // to set the new PS1
+    let mut rcfile = tempfile::NamedTempFile::new().unwrap();
+    rcfile.write(b"include () { [[ -f \"$1\" ]] && source \"$1\"; }\n\
+                  include /etc/bash.bashrc\n\
+                  include ~/.bashrc\n\
+                  PS1=\"~~~~\"\n").expect("cannot write to tmpfile");
+    let mut c = Command::new("bash");
+    c.args(&["--rcfile", rcfile.path().to_str().unwrap_or_else(|| return "temp file does not exist".into())]);
+    spawn_command(c, timeout).and_then(|p| {
         let new_prompt = "[REXPECT_PROMPT>";
-        p.send_line(&("PS1='".to_string() + new_prompt + "'"))?;
         let mut pb = PtyBashSession {
             prompt: new_prompt.to_string(),
             pty_session: p,
         };
+        pb.exp_string("~~~~")?;
+        rcfile.close().chain_err(|| "cannot delete temporary rcfile")?;
+        pb.send_line(&("PS1='".to_string() + new_prompt + "'"))?;
         // wait until the new prompt appears
         pb.wait_for_prompt()?;
         Ok(pb)
@@ -395,10 +404,13 @@ mod tests {
     fn test_bash() {
         || -> Result<()> {
             let mut p = spawn_bash(None)?;
+            while let Some(a) = p.try_read() {
+                println!("{}", a);
+            }
             p.send_line("cd /tmp/")?;
             p.wait_for_prompt()?;
             p.send_line("pwd")?;
-            assert_eq!("/tmp", p.read_line()?);
+            assert_eq!("/tmp\r\n", p.wait_for_prompt()?);
             Ok(())
         }()
                 .unwrap_or_else(|e| panic!("test_bash failed: {}", e));

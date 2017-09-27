@@ -81,6 +81,7 @@
 
 extern crate nix;
 extern crate regex;
+extern crate tempfile;
 
 pub mod process;
 pub mod session;

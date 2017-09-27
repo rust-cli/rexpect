@@ -15,7 +15,8 @@ readme      = "README.md"
 [dependencies]
 nix = "0.9"
 regex = "0.2"
-error-chain = "0.10"
+error-chain = "0.11"
+tempfile = "2"
 
 [badges]
 travis-ci = { repository = "philippkeller/rexpect" }
