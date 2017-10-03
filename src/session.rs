@@ -86,6 +86,15 @@ impl PtySession {
         self.writer
             .flush()
             .chain_err(|| "cannot flush after sending ctrl keycode")?;
+        // TODO: that's completely wrong. What if the caller has not consumed
+        // all strings before..? Then we would read one of the produced lines
+        // earlier. A few ideas:
+        // - echo on and then he can check for ^C
+        // - longer wait before control and then the reader just discards the empty line
+        // - we require that he reads everything before (emptying queue with try_read) and
+        //   then we just retry sending the ^something until that empty line is there
+        // - is ^something actually legit outside the bash environment? Shouldn't it be moved
+        //   to the bash_process thingie?
         self.read_line()?;
         Ok(())
     }
