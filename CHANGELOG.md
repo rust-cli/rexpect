@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## Unreleased
+
+- if process doesn't end on SIGTERM a `kill -9` is sent after timeout is elapsed
+
 ## [0.2.0] 2017-09-20
 
 ### Changed

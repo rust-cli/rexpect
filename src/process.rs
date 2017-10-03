@@ -58,6 +58,7 @@ use errors::*; // load error-chain
 pub struct PtyProcess {
     pub pty: PtyMaster,
     pub child_pid: Pid,
+    kill_timeout: Option<time::Duration>,
 }
 
 
@@ -125,6 +126,7 @@ impl PtyProcess {
                     Ok(PtyProcess {
                            pty: master_fd,
                            child_pid: child_pid,
+                           kill_timeout: None,
                        })
                 }
             }
@@ -133,12 +135,17 @@ impl PtyProcess {
     }
 
     /// Get handle to pty fork for reading/writing
-    ///
-    ///
     pub fn get_file_handle(&self) -> File {
         // needed because otherwise fd is closed both by dropping process and reader/writer
         let fd = dup(self.pty.as_raw_fd()).unwrap();
         unsafe { File::from_raw_fd(fd) }
+    }
+
+    /// At the drop of PtyProcess the running process is killed. This is blocking forever if
+    /// the process does not react to a normal kill. If kill_timeout is set the process is
+    /// `kill -9`ed after duration
+    pub fn set_kill_timeout(&mut self, timeout_ms: Option<u64>) {
+        self.kill_timeout = timeout_ms.and_then(|millis| Some(time::Duration::from_millis(millis)));
     }
 
     /// Get status of child process, nonblocking.
@@ -195,8 +202,10 @@ impl PtyProcess {
     /// the pty session is closed upon dropping PtyMaster,
     /// so we don't need to explicitely do that here.
     ///
-    // TODO: this needs some way of timeout before we send a kill -9
+    /// if `kill_timeout` is set and a repeated sending of signal does not result in the process
+    /// being killed, then `kill -9` is sent after the `kill_timeout` duration has elapsed.
     pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus> {
+        let start = time::Instant::now();
         loop {
             match signal::kill(self.child_pid, sig) {
                 Ok(_) => {}
@@ -211,6 +220,12 @@ impl PtyProcess {
             match self.status() {
                 Some(status) if status != wait::WaitStatus::StillAlive => return Ok(status),
                 Some(_) | None => thread::sleep(time::Duration::from_millis(100)),
+            }
+            // kill -9 if timout is reached
+            if let Some(timeout) = self.kill_timeout {
+                if start.elapsed() > timeout {
+                    signal::kill(self.child_pid, signal::Signal::SIGKILL).chain_err(|| "")?
+                }
             }
         }
     }

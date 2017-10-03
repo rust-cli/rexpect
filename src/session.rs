@@ -190,6 +190,9 @@ impl PtySession {
 ///
 /// - `program`: This is split at spaces and turned into a `process::Command`
 ///   if you wish more control over this, use `spawn_command`
+/// - `timeout`: If Some: all `exp_*` commands time out after x millisecons, if None: never time out
+///   it's usually good to set this to e.g. 30'000 (30s, the default in pexpect) if you want to
+///   automate things
 pub fn spawn(program: &str, timeout: Option<u64>) -> Result<PtySession> {
     let command = if program.find(" ").is_some() {
         let mut parts = program.split(" ");
@@ -205,8 +208,9 @@ pub fn spawn(program: &str, timeout: Option<u64>) -> Result<PtySession> {
 /// See `spawn`
 pub fn spawn_command(command: Command, timeout: Option<u64>) -> Result<PtySession> {
     let commandname = format!("{:?}", &command);
-    let process = PtyProcess::new(command)
+    let mut process = PtyProcess::new(command)
         .chain_err(|| "couldn't start process")?;
+    process.set_kill_timeout(timeout);
 
     let f = process.get_file_handle();
     let writer = LineWriter::new(f.try_clone().chain_err(|| "couldn't open write stream")?);
@@ -279,11 +283,17 @@ impl Drop for PtyBashSession {
 
 /// Spawn bash in a pty session, run programs and expect output
 ///
+///
 /// The difference to `spawn` and `spawn_command` is:
 ///
 /// - spawn_bash starts bash with a custom rcfile which guarantees
 ///   a certain prompt
 /// - the PtyBashSession also provides `wait_for_prompt` and `execute`
+///
+/// timeout: the duration until which `exp_*` returns a timeout error, or None
+/// additionally, when dropping the bash prompt while bash is still blocked by a program
+/// (e.g. `sleep 9999`) then the timeout is used as a timeout before a `kill -9` is issued
+/// at the bash command.
 ///
 /// bash is started with echo off. That means you don't need to "read back"
 /// what you wrote to bash. But what you need to do is a `wait_for_prompt`
@@ -314,7 +324,7 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyBashSession> {
         };
         pb.exp_string("~~~~")?;
         rcfile.close().chain_err(|| "cannot delete temporary rcfile")?;
-        pb.send_line(&("PS1='".to_string() + new_prompt + "'"))?;
+        pb.execute(&("PS1='".to_string() + new_prompt + "'"))?;
         // wait until the new prompt appears
         pb.wait_for_prompt()?;
         Ok(pb)
@@ -401,15 +411,23 @@ mod tests {
     }
 
     #[test]
+    fn test_kill_timeout() {
+        || -> Result<()> {
+            let mut p = spawn_bash(Some(1000))?;
+            p.execute("sleep 999")?;
+            Ok(())
+        }().unwrap_or_else(|e| panic!("test_kill_timeout failed: {}", e));;
+        // p is dropped here and kill is sent immediatly to bash
+        // Since that is not enough to make bash exit, a kill -9 is sent within 1s (timeout)
+    }
+
+    #[test]
     fn test_bash() {
         || -> Result<()> {
             let mut p = spawn_bash(None)?;
-            while let Some(a) = p.try_read() {
-                println!("{}", a);
-            }
-            p.send_line("cd /tmp/")?;
+            p.execute("cd /tmp/")?;
             p.wait_for_prompt()?;
-            p.send_line("pwd")?;
+            p.execute("pwd")?;
             assert_eq!("/tmp\r\n", p.wait_for_prompt()?);
             Ok(())
         }()
