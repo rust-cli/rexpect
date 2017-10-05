@@ -24,7 +24,7 @@ use rexpect::spawn;
 use rexpect::errors::*;
 
 fn do_ftp() -> Result<()> {
-    let mut p = spawn("ftp speedtest.tele2.net", Some(2000))?;
+    let mut p = spawn("ftp speedtest.tele2.net", Some(30_000))?;
     p.exp_regex("Name \\(.*\\):")?;
     p.send_line("anonymous")?;
     p.exp_string("Password")?;
@@ -45,7 +45,11 @@ fn main() {
 }
 ```
 
-# Example with bash
+# Example with bash and reading from programs
+
+TODO, take from bash_read.rs
+
+# Example with bash and job control
 
 ```rust
 extern crate rexpect;
@@ -54,7 +58,7 @@ use rexpect::errors::*;
 
 
 fn run() -> Result<()> {
-    let mut p = spawn_bash(None)?;
+    let mut p = spawn_bash(Some(30_000))?;
     p.execute("ping 8.8.8.8")?;
     p.send_control('z')?;
     p.wait_for_prompt()?;
@@ -72,6 +76,8 @@ fn main() {
     run().unwrap_or_else(|e| panic!("bash process failed with {}", e));
 }
 ```
+
+
 
 # Project Status
 

@@ -59,15 +59,14 @@
 //!
 //!
 //! fn run() -> Result<()> {
-//!     let mut p = spawn_bash(None)?;
-//!     p.execute("ping 8.8.8.8")?;
+//!     let mut p = spawn_bash(Some(30_000))?;
+//!     p.execute("ping 8.8.8.8", "bytes of data")?;
 //!     p.send_control('z')?;
 //!     p.wait_for_prompt()?;
-//!     p.execute("bg")?;
+//!     p.execute("bg", "suspended")?;
+//!     p.send_line("sleep 1")?;
 //!     p.wait_for_prompt()?;
-//!     p.execute("sleep 1")?;
-//!     p.wait_for_prompt()?;
-//!     p.execute("fg")?;
+//!     p.execute("fg", "continued")?;
 //!     p.send_control('c')?;
 //!     p.exp_string("packet loss")?;
 //!     Ok(())

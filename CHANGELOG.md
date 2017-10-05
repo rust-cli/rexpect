@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## Unreleased
 
 - if process doesn't end on SIGTERM a `kill -9` is sent after timeout is elapsed
+- execute takes string to wait for as second argument (before it waited 10ms which was way too fragile)
 
 ## [0.2.0] 2017-09-20
 

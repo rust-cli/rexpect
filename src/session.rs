@@ -8,7 +8,6 @@ use std::io::LineWriter;
 use std::process::Command;
 use std::io::prelude::*;
 use std::ops::{Deref, DerefMut};
-use std::{time, thread};
 use errors::*; // load error-chain
 use tempfile;
 
@@ -32,7 +31,7 @@ pub struct PtySession {
 ///
 /// # fn main() {
 ///     # || -> Result<()> {
-/// let mut s = spawn("cat", None)?;
+/// let mut s = spawn("cat", Some(1000))?;
 /// s.send_line("hello, polly!")?;
 /// let line = s.read_line()?;
 /// assert_eq!("hello, polly!", line);
@@ -179,7 +178,7 @@ impl PtySession {
     ///
     /// # fn main() {
     ///     # || -> Result<()> {
-    /// let mut s = spawn("cat", None)?;
+    /// let mut s = spawn("cat", Some(1000))?;
     /// s.send_line("hello, polly!")?;
     /// s.exp_any(vec![ReadUntil::String("hello".into()),
     ///                ReadUntil::EOF])?;
@@ -199,10 +198,13 @@ impl PtySession {
 ///
 /// - `program`: This is split at spaces and turned into a `process::Command`
 ///   if you wish more control over this, use `spawn_command`
-/// - `timeout`: If Some: all `exp_*` commands time out after x millisecons, if None: never time out
-///   it's usually good to set this to e.g. 30'000 (30s, the default in pexpect) if you want to
-///   automate things
-pub fn spawn(program: &str, timeout: Option<u64>) -> Result<PtySession> {
+/// - `timeout`: If Some: all `exp_*` commands time out after x millisecons, if None: never times
+///   out.
+///   It's higly recommended to put a timeout there, as otherwise in case of
+///   a problem the program just hangs instead of exiting with an
+///   error message indicating where it stopped.
+///   For automation 30'000 (30s, the default in pexpect) is a good value.
+pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession> {
     let command = if program.find(" ").is_some() {
         let mut parts = program.split(" ");
         let mut cmd = Command::new(parts.next().unwrap());
@@ -211,19 +213,19 @@ pub fn spawn(program: &str, timeout: Option<u64>) -> Result<PtySession> {
     } else {
         Command::new(program)
     };
-    spawn_command(command, timeout)
+    spawn_command(command, timeout_ms)
 }
 
 /// See `spawn`
-pub fn spawn_command(command: Command, timeout: Option<u64>) -> Result<PtySession> {
+pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession> {
     let commandname = format!("{:?}", &command);
     let mut process = PtyProcess::new(command)
         .chain_err(|| "couldn't start process")?;
-    process.set_kill_timeout(timeout);
+    process.set_kill_timeout(timeout_ms);
 
     let f = process.get_file_handle();
     let writer = LineWriter::new(f.try_clone().chain_err(|| "couldn't open write stream")?);
-    let reader = NBReader::new(f, timeout);
+    let reader = NBReader::new(f, timeout_ms);
     Ok(PtySession {
            process: process,
            writer: writer,
@@ -243,24 +245,36 @@ impl PtyBashSession {
         self.pty_session.exp_string(&self.prompt)
     }
 
-    /// Send cmd to bash and wait 10ms to let the scheduler run the command, then immediately
-    /// return (nonblocking! i.e. does not wait for the cmd to finish)
+    /// Send cmd to bash and wait for the ready string being present
     ///
-    /// Caution: there is no guarantee that after the 10ms the command is actually started!
-    /// To be sure that the startup time of cmd is over you best wait for a certain output
-    /// with `exp_string()` or another `ext_*` method
-    ///
-    /// Q: Why is the 10ms sleep needed?
+    /// Q; Why can't I just do `send_line` and immediately continue?
     /// A: Executing a command in bash causes a fork. If the Unix kernel chooses the
     ///    parent process (bash) to go first and the bash process sends e.g. Ctrl-C then the
     ///    Ctrl-C goes to nirvana.
-    ///    A 10ms sleep however makes the scheduler do a context switch and there is a quite
-    ///    high chance that the just executed cmd comes next (on this or on another free core)
-    ///    so when the 10ms sleep is over and the bash process is eligible for being scheduled
-    ///    in the process has already started and subsequent input is received by the process
-    pub fn execute(&mut self, cmd: &str) -> Result<()> {
+    ///    The only way to prevent this situation is to wait for a ready string being present
+    ///    in the output.
+    ///
+    /// Another safe way to tackle this problem is to use `send_line()` and `wait_for_prompt()`
+    ///
+    /// # Example:
+    ///
+    /// ```
+    /// use rexpect::spawn_bash;
+    /// # use rexpect::errors::*;
+    ///
+    /// # fn main() {
+    ///     # || -> Result<()> {
+    /// let mut p = spawn_bash(Some(1000))?;
+    /// p.execute("cat <(echo ready) -", "ready")?;
+    /// p.send_line("hans")?;
+    /// p.exp_string("hans")?;
+    ///         # Ok(())
+    ///     # }().expect("test failed");
+    /// # }
+    /// ```
+    pub fn execute(&mut self, cmd: &str, ready_regex: &str) -> Result<()> {
         self.pty_session.send_line(cmd)?;
-        thread::sleep(time::Duration::from_millis(10));
+        self.pty_session.exp_regex(ready_regex)?;
         Ok(())
     }
 }
@@ -302,7 +316,9 @@ impl Drop for PtyBashSession {
 /// timeout: the duration until which `exp_*` returns a timeout error, or None
 /// additionally, when dropping the bash prompt while bash is still blocked by a program
 /// (e.g. `sleep 9999`) then the timeout is used as a timeout before a `kill -9` is issued
-/// at the bash command.
+/// at the bash command. Use a timeout whenever possible because it makes
+/// debugging a lot easier (otherwise the program just hangs and you
+/// don't know where)
 ///
 /// bash is started with echo off. That means you don't need to "read back"
 /// what you wrote to bash. But what you need to do is a `wait_for_prompt`
@@ -333,7 +349,7 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyBashSession> {
         };
         pb.exp_string("~~~~")?;
         rcfile.close().chain_err(|| "cannot delete temporary rcfile")?;
-        pb.execute(&("PS1='".to_string() + new_prompt + "'"))?;
+        pb.send_line(&("PS1='".to_string() + new_prompt + "'"))?;
         // wait until the new prompt appears
         pb.wait_for_prompt()?;
         Ok(pb)
@@ -347,7 +363,7 @@ mod tests {
     #[test]
     fn test_read_line() {
         || -> Result<()> {
-            let mut s = spawn("cat", None)?;
+            let mut s = spawn("cat", Some(1000))?;
             s.send_line("hans")?;
             assert_eq!("hans", s.read_line()?);
             let should = ::process::wait::WaitStatus::Signaled(s.process.child_pid,
@@ -408,7 +424,7 @@ mod tests {
     #[test]
     fn test_expect_any() {
         || -> Result<()> {
-            let mut p = spawn("cat", None).expect("cannot run cat");
+            let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
             p.send_line("Hi")?;
             match p.exp_any(vec![ReadUntil::NBytes(3), ReadUntil::String("Hi".to_string())]) {
                 Ok(s) => assert_eq!(("".to_string(), "Hi\r".to_string()), s),
@@ -423,7 +439,7 @@ mod tests {
     fn test_kill_timeout() {
         || -> Result<()> {
             let mut p = spawn_bash(Some(1000))?;
-            p.execute("sleep 999")?;
+            p.execute("cat <(echo ready) -", "ready")?;
             Ok(())
         }().unwrap_or_else(|e| panic!("test_kill_timeout failed: {}", e));;
         // p is dropped here and kill is sent immediatly to bash
@@ -433,10 +449,10 @@ mod tests {
     #[test]
     fn test_bash() {
         || -> Result<()> {
-            let mut p = spawn_bash(None)?;
-            p.execute("cd /tmp/")?;
+            let mut p = spawn_bash(Some(1000))?;
+            p.send_line("cd /tmp/")?;
             p.wait_for_prompt()?;
-            p.execute("pwd")?;
+            p.send_line("pwd")?;
             assert_eq!("/tmp\r\n", p.wait_for_prompt()?);
             Ok(())
         }()
@@ -446,15 +462,15 @@ mod tests {
     #[test]
     fn test_bash_control_chars() {
         || -> Result<()> {
-            let mut p = spawn_bash(None)?;
-            p.execute("sleep 10")?;
+            let mut p = spawn_bash(Some(1000))?;
+            p.execute("cat <(echo ready) -", "ready")?;
             p.send_control('c')?; // abort: SIGINT
             p.wait_for_prompt()?;
-            p.execute("sleep 10")?;
+            p.execute("cat <(echo ready) -", "ready")?;
             p.send_control('z')?; // suspend:SIGTSTPcon
-            p.exp_regex(r"(Stopped|suspended)\s+sleep 10")?;
+            p.exp_regex(r"(Stopped|suspended)\s+cat .*")?;
             p.send_line("fg")?;
-            p.exp_string("sleep 10")?;
+            p.execute("cat <(echo ready) -", "ready")?;
             p.send_control('c')?;
             Ok(())
         }()
