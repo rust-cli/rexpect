@@ -47,9 +47,54 @@ fn main() {
 
 # Example with bash and reading from programs
 
-TODO, take from bash_read.rs
+
+```rust
+
+extern crate rexpect;
+use rexpect::spawn_bash;
+use rexpect::errors::*;
+
+
+fn foo() -> Result<()> {
+    let mut p = spawn_bash(Some(2000))?;
+    
+    // case 1: wait until program is done
+    p.send_line("hostname")?;
+    let hostname = p.read_line()?;
+    p.wait_for_prompt()?; // go sure `hostname` is really done
+    println!("Current hostname: {}", hostname);
+
+    // case 2: wait until done, only extract a few infos
+    p.send_line("wc /etc/passwd")?;
+    // `exp_regex` returns both string-before-match and match itself, discard first
+    let (_, lines) = p.exp_regex("[0-9]+")?;
+    let (_, words) = p.exp_regex("[0-9]+")?;
+    let (_, bytes) = p.exp_regex("[0-9]+")?;
+    p.wait_for_prompt()?; // go sure `wc` is really done
+    println!("/etc/passwd has {} lines, {} words, {} chars", lines, words, bytes);
+
+    // case 3: read while program is still executing
+    p.execute("ping 8.8.8.8", "bytes of data")?; // returns when it sees "bytes of data" in output
+    for _ in 0..5 {
+        // times out if one ping takes longer than 2s
+        let (_, duration) = p.exp_regex("[0-9. ]+ ms")?;
+        println!("Roundtrip time: {}", duration);
+    }
+    p.send_control('c')?;
+}
+```
 
 # Example with bash and job control
+
+One frequent bitfall with sending ctrl-c and friends is that you need
+to somehow ensure that the program has fully loaded, otherwise the ctrl-*
+goes into nirvana. There are two functions to ensure that:
+
+- `execute` where you need to provide a match string which is present
+  on stdout/stderr when the program is ready
+- `wait_for_prompt` which waits until the prompt is shown again
+
+
 
 ```rust
 extern crate rexpect;
@@ -58,42 +103,34 @@ use rexpect::errors::*;
 
 
 fn run() -> Result<()> {
-    let mut p = spawn_bash(Some(30_000))?;
-    p.execute("ping 8.8.8.8")?;
+    let mut p = spawn_bash(Some(1000))?;
+    p.execute("ping 8.8.8.8", "bytes of data")?;
     p.send_control('z')?;
     p.wait_for_prompt()?;
-    p.execute("bg")?;
+    // bash writes 'ping 8.8.8.8' to stdout again to state which job was put into background
+    p.execute("bg", "ping 8.8.8.8")?;
     p.wait_for_prompt()?;
-    p.execute("sleep 1")?;
+    p.send_line("sleep 1")?;
     p.wait_for_prompt()?;
-    p.execute("fg")?;
+    // bash writes 'ping 8.8.8.8' to stdout again to state which job was put into foreground
+    p.execute("fg", "ping 8.8.8.8")?;
     p.send_control('c')?;
     p.exp_string("packet loss")?;
     Ok(())
 }
 
-fn main() {
-    run().unwrap_or_else(|e| panic!("bash process failed with {}", e));
-}
 ```
-
-
 
 # Project Status
 
-What already works:
+Rexpect covers more or less the features of pexpect. If you miss anything
+I'm happy to receive PRs or also Issue requests of course.
 
-- spawning a processes through pty (threadsafe!), auto cleanup (killing all child processes)
-- expect regex/string/EOF including timeouts
-- spawning bash, interacting with ctrl-z, bg etc
+The tests cover most of the aspects and it should run out of the box for
+rust stable, beta and nightly on both Linux or Mac.
 
-What does not yet work:
-
-- other repls such as python are not implemented yet
-
-What will probably never be implemented
-
-- screen/ANSI support ([deprecated](https://github.com/pexpect/pexpect/blob/master/pexpect/screen.py#L32) in pexpect anyway)
+That said, I don't know of too many people using it yet, so use this
+with caution.  
 
 # Design decisions
 

@@ -8,11 +8,13 @@ fn run() -> Result<()> {
     p.execute("ping 8.8.8.8", "bytes of data")?;
     p.send_control('z')?;
     p.wait_for_prompt()?;
-    p.send_line("bg", "continued")?;
+    // bash writes 'ping 8.8.8.8' to stdout again to state which job was put into background
+    p.execute("bg", "ping 8.8.8.8")?;
     p.wait_for_prompt()?;
     p.send_line("sleep 1")?;
     p.wait_for_prompt()?;
-    p.execute("fg", "running")?;
+    // bash writes 'ping 8.8.8.8' to stdout again to state which job was put into foreground
+    p.execute("fg", "ping 8.8.8.8")?;
     p.send_control('c')?;
     p.exp_string("packet loss")?;
     Ok(())
