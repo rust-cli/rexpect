@@ -81,6 +81,7 @@ fn foo() -> Result<()> {
         println!("Roundtrip time: {}", duration);
     }
     p.send_control('c')?;
+    Ok(())
 }
 ```
 
