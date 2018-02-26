@@ -328,7 +328,8 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyBashSession> {
     rcfile.write(b"include () { [[ -f \"$1\" ]] && source \"$1\"; }\n\
                   include /etc/bash.bashrc\n\
                   include ~/.bashrc\n\
-                  PS1=\"~~~~\"\n").expect("cannot write to tmpfile");
+                  PS1=\"~~~~\"\n\
+                  unset PROMPT_COMMAND\n").expect("cannot write to tmpfile");
     let mut c = Command::new("bash");
     c.args(&["--rcfile", rcfile.path().to_str().unwrap_or_else(|| return "temp file does not exist".into())]);
     spawn_command(c, timeout).and_then(|p| {
