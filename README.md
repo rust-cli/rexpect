@@ -49,13 +49,12 @@ fn main() {
 
 
 ```rust
-
 extern crate rexpect;
 use rexpect::spawn_bash;
 use rexpect::errors::*;
 
 
-fn foo() -> Result<()> {
+fn do_bash() -> Result<()> {
     let mut p = spawn_bash(Some(2000))?;
     
     // case 1: wait until program is done
@@ -83,6 +82,11 @@ fn foo() -> Result<()> {
     p.send_control('c')?;
     Ok(())
 }
+
+fn main() {
+    do_bash().unwrap_or_else(|e| panic!("bash job failed with {}", e));
+}
+
 ```
 
 # Example with bash and job control
@@ -103,7 +107,7 @@ use rexpect::spawn_bash;
 use rexpect::errors::*;
 
 
-fn run() -> Result<()> {
+fn do_bash_jobcontrol() -> Result<()> {
     let mut p = spawn_bash(Some(1000))?;
     p.execute("ping 8.8.8.8", "bytes of data")?;
     p.send_control('z')?;
@@ -118,6 +122,10 @@ fn run() -> Result<()> {
     p.send_control('c')?;
     p.exp_string("packet loss")?;
     Ok(())
+}
+
+fn main() {
+    do_bash_jobcontrol().unwrap_or_else(|e| panic!("bash with job control failed with {}", e));
 }
 
 ```
