@@ -49,7 +49,6 @@ fn main() {
 
 
 ```rust
-//Run this code with cargo
 extern crate rexpect;
 use rexpect::spawn_bash;
 use rexpect::errors::*;
