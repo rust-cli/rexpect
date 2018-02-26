@@ -18,6 +18,7 @@ rexpect = "0.3"
 Simple example for interacting via ftp:
 
 ```rust
+//Run this code with cargo
 extern crate rexpect;
 
 use rexpect::spawn;
@@ -49,7 +50,7 @@ fn main() {
 
 
 ```rust
-
+//Run this code with cargo
 extern crate rexpect;
 use rexpect::spawn_bash;
 use rexpect::errors::*;
@@ -83,6 +84,11 @@ fn foo() -> Result<()> {
     p.send_control('c')?;
     Ok(())
 }
+
+fn main() {
+    foo().unwrap_or_else(|e| panic!("bash and reading from programs {}", e));
+}
+
 ```
 
 # Example with bash and job control
@@ -98,6 +104,7 @@ goes into nirvana. There are two functions to ensure that:
 
 
 ```rust
+//Run this code with cargo
 extern crate rexpect;
 use rexpect::spawn_bash;
 use rexpect::errors::*;
@@ -118,6 +125,10 @@ fn run() -> Result<()> {
     p.send_control('c')?;
     p.exp_string("packet loss")?;
     Ok(())
+}
+
+fn main() {
+    foo().unwrap_or_else(|e| panic!("bash and reading from programs {}", e));
 }
 
 ```
