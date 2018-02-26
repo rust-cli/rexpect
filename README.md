@@ -128,7 +128,7 @@ fn run() -> Result<()> {
 }
 
 fn main() {
-    foo().unwrap_or_else(|e| panic!("bash and reading from programs {}", e));
+    foo().unwrap_or_else(|e| panic!("bash and job control {}", e));
 }
 
 ```
