@@ -11,7 +11,7 @@ fn run() -> Result<()> {
     // bash writes 'ping 8.8.8.8' to stdout again to state which job was put into background
     p.execute("bg", "ping 8.8.8.8")?;
     p.wait_for_prompt()?;
-    p.send_line("sleep 1")?;
+    p.send_line("sleep 0.5")?;
     p.wait_for_prompt()?;
     // bash writes 'ping 8.8.8.8' to stdout again to state which job was put into foreground
     p.execute("fg", "ping 8.8.8.8")?;
