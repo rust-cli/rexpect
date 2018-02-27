@@ -134,6 +134,9 @@ impl PtySession {
     /// Return a tuple:
     /// 1. the yet unread output
     /// 2. the matched regex
+    ///
+    /// Note that `exp_regex("^foo")` matches the start of the yet consumed output.
+    /// For matching the start of the line use `exp_regex("\nfoo")`
     pub fn exp_regex(&mut self, regex: &str) -> Result<(String, String)> {
         let res = self.exp(&ReadUntil::Regex(Regex::new(regex).chain_err(|| "invalid regex")?))
             .and_then(|s| Ok(s));
