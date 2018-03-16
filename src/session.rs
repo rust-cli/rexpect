@@ -182,6 +182,39 @@ impl PtySession {
     pub fn exp_any(&mut self, needles: Vec<ReadUntil>) -> Result<(String, String)> {
         self.exp(&ReadUntil::Any(needles))
     }
+
+    /// Send cmd to bash and wait for the ready string being present
+    ///
+    /// Q; Why can't I just do `send_line` and immediately continue?
+    /// A: Executing a command in bash causes a fork. If the Unix kernel chooses the
+    ///    parent process (bash) to go first and the bash process sends e.g. Ctrl-C then the
+    ///    Ctrl-C goes to nirvana.
+    ///    The only way to prevent this situation is to wait for a ready string being present
+    ///    in the output.
+    ///
+    /// Another safe way to tackle this problem is to use `send_line()` and `wait_for_prompt()`
+    ///
+    /// # Example:
+    ///
+    /// ```
+    /// use rexpect::spawn_bash;
+    /// # use rexpect::errors::*;
+    ///
+    /// # fn main() {
+    ///     # || -> Result<()> {
+    /// let mut p = spawn_bash(Some(1000))?;
+    /// p.execute("cat <(echo ready) -", "ready")?;
+    /// p.send_line("hans")?;
+    /// p.exp_string("hans")?;
+    ///         # Ok(())
+    ///     # }().expect("test failed");
+    /// # }
+    /// ```
+    pub fn execute(&mut self, cmd: &str, ready_regex: &str) -> Result<()> {
+        self.send_line(cmd)?;
+        self.exp_regex(ready_regex)?;
+        Ok(())
+    }
 }
 
 /// Start command in background in a pty session (pty fork) and return a struct
@@ -236,39 +269,6 @@ pub struct PtyBashSession {
 impl PtyBashSession {
     pub fn wait_for_prompt(&mut self) -> Result<String> {
         self.pty_session.exp_string(&self.prompt)
-    }
-
-    /// Send cmd to bash and wait for the ready string being present
-    ///
-    /// Q; Why can't I just do `send_line` and immediately continue?
-    /// A: Executing a command in bash causes a fork. If the Unix kernel chooses the
-    ///    parent process (bash) to go first and the bash process sends e.g. Ctrl-C then the
-    ///    Ctrl-C goes to nirvana.
-    ///    The only way to prevent this situation is to wait for a ready string being present
-    ///    in the output.
-    ///
-    /// Another safe way to tackle this problem is to use `send_line()` and `wait_for_prompt()`
-    ///
-    /// # Example:
-    ///
-    /// ```
-    /// use rexpect::spawn_bash;
-    /// # use rexpect::errors::*;
-    ///
-    /// # fn main() {
-    ///     # || -> Result<()> {
-    /// let mut p = spawn_bash(Some(1000))?;
-    /// p.execute("cat <(echo ready) -", "ready")?;
-    /// p.send_line("hans")?;
-    /// p.exp_string("hans")?;
-    ///         # Ok(())
-    ///     # }().expect("test failed");
-    /// # }
-    /// ```
-    pub fn execute(&mut self, cmd: &str, ready_regex: &str) -> Result<()> {
-        self.pty_session.send_line(cmd)?;
-        self.pty_session.exp_regex(ready_regex)?;
-        Ok(())
     }
 }
 

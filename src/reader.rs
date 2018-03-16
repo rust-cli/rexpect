@@ -243,7 +243,10 @@ impl NBReader {
             if let Some(timeout) = self.timeout {
                 if start.elapsed() > timeout {
                     return Err(ErrorKind::Timeout(needle.to_string(),
-                                                  self.buffer.clone(),
+                                                  self.buffer.clone()
+                                                      .replace("\n", "`\\n`\n")
+                                                      .replace("\r", "`\\r`")
+                                                      .replace('\u{1b}', "`^`"),
                                                   timeout)
                                        .into());
                 }
