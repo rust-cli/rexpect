@@ -232,22 +232,22 @@ pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySes
 /// executes it and writes some output
 pub struct PtyReplSession {
     /// the prompt, used for `wait_for_prompt`, e.g. ">>> " for python
-    prompt: String,
+    pub prompt: String,
 
     /// the pty_session you prepared before (initiating the shell, maybe set a custom prompt, etc.)
     /// see `spawn_bash` for an example
-    pty_session: PtySession,
+    pub pty_session: PtySession,
 
     /// if set, then the quit_command is called when this object is dropped
     /// you need to provide this if the shell you're testing is not killed by just sending
     /// SIGTERM
-    quit_command: Option<String>,
+    pub quit_command: Option<String>,
 
     /// set this to true if the repl has echo on (i.e. sends user input to stdout)
     /// although echo is set off at pty fork (see `PtyProcess::new`) a few repls still
     /// seem to be able to send output. You may need to try with true first, and if
     /// tests fail set this to false.
-    echo_on: bool,
+    pub echo_on: bool,
 }
 
 impl PtyReplSession {
