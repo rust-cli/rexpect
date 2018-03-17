@@ -182,39 +182,6 @@ impl PtySession {
     pub fn exp_any(&mut self, needles: Vec<ReadUntil>) -> Result<(String, String)> {
         self.exp(&ReadUntil::Any(needles))
     }
-
-    /// Send cmd to bash and wait for the ready string being present
-    ///
-    /// Q; Why can't I just do `send_line` and immediately continue?
-    /// A: Executing a command in bash causes a fork. If the Unix kernel chooses the
-    ///    parent process (bash) to go first and the bash process sends e.g. Ctrl-C then the
-    ///    Ctrl-C goes to nirvana.
-    ///    The only way to prevent this situation is to wait for a ready string being present
-    ///    in the output.
-    ///
-    /// Another safe way to tackle this problem is to use `send_line()` and `wait_for_prompt()`
-    ///
-    /// # Example:
-    ///
-    /// ```
-    /// use rexpect::spawn_bash;
-    /// # use rexpect::errors::*;
-    ///
-    /// # fn main() {
-    ///     # || -> Result<()> {
-    /// let mut p = spawn_bash(Some(1000))?;
-    /// p.execute("cat <(echo ready) -", "ready")?;
-    /// p.send_line("hans")?;
-    /// p.exp_string("hans")?;
-    ///         # Ok(())
-    ///     # }().expect("test failed");
-    /// # }
-    /// ```
-    pub fn execute(&mut self, cmd: &str, ready_regex: &str) -> Result<()> {
-        self.send_line(cmd)?;
-        self.exp_regex(ready_regex)?;
-        Ok(())
-    }
 }
 
 /// Start command in background in a pty session (pty fork) and return a struct
@@ -260,39 +227,108 @@ pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySes
        })
 }
 
-/// Interact with a bash shell: execute programs, interact with ctrl-z, bg, etc.
-pub struct PtyBashSession {
+/// A repl session: e.g. bash or the python shell:
+/// You have a prompt where a user inputs commands and the shell
+/// executes it and writes some output
+pub struct PtyReplSession {
+    /// the prompt, used for `wait_for_prompt`, e.g. ">>> " for python
     prompt: String,
+
+    /// the pty_session you prepared before (initiating the shell, maybe set a custom prompt, etc.)
+    /// see `spawn_bash` for an example
     pty_session: PtySession,
+
+    /// if set, then the quit_command is called when this object is dropped
+    /// you need to provide this if the shell you're testing is not killed by just sending
+    /// SIGTERM
+    quit_command: Option<String>,
+
+    /// set this to true if the repl has echo on (i.e. sends user input to stdout)
+    /// although echo is set off at pty fork (see `PtyProcess::new`) a few repls still
+    /// seem to be able to send output. You may need to try with true first, and if
+    /// tests fail set this to false.
+    echo_on: bool,
 }
 
-impl PtyBashSession {
+impl PtyReplSession {
     pub fn wait_for_prompt(&mut self) -> Result<String> {
         self.pty_session.exp_string(&self.prompt)
+    }
+
+    /// Send cmd to repl and:
+    /// 1. wait for the cmd to be echoed (if echo_on=true)
+    /// 2. wait for the ready string being present
+    ///
+    /// Q: Why can't I just do `send_line` and immediately continue?
+    /// A: Executing a command in e.g. bash causes a fork. If the Unix kernel chooses the
+    ///    parent process (bash) to go first and the bash process sends e.g. Ctrl-C then the
+    ///    Ctrl-C goes to nirvana.
+    ///    The only way to prevent this situation is to wait for a ready string being present
+    ///    in the output.
+    ///
+    /// Another safe way to tackle this problem is to use `send_line()` and `wait_for_prompt()`
+    ///
+    /// # Example:
+    ///
+    /// ```
+    /// use rexpect::spawn_bash;
+    /// # use rexpect::errors::*;
+    ///
+    /// # fn main() {
+    ///     # || -> Result<()> {
+    /// let mut p = spawn_bash(Some(1000))?;
+    /// p.execute("cat <(echo ready) -", "ready")?;
+    /// p.send_line("hans")?;
+    /// p.exp_string("hans")?;
+    ///         # Ok(())
+    ///     # }().expect("test failed");
+    /// # }
+    /// ```
+    pub fn execute(&mut self, cmd: &str, ready_regex: &str) -> Result<()> {
+        self.send_line(cmd)?;
+        if self.echo_on {
+            self.exp_string(cmd)?;
+        }
+        self.exp_regex(ready_regex)?;
+        Ok(())
+    }
+
+    /// send line to repl (and flush output) and then, if echo_on=true wait for the
+    /// input to appear.
+    /// Return: number of bytes written
+    pub fn send_line(&mut self, line: &str) -> Result<(usize)> {
+        let bytes_written = self.pty_session.send_line(line)?;
+        if self.echo_on {
+            self.exp_string(line)?;
+        }
+        Ok(bytes_written)
     }
 }
 
 // make PtySession's methods available directly
-impl Deref for PtyBashSession {
+impl Deref for PtyReplSession {
     type Target = PtySession;
     fn deref(&self) -> &PtySession {
         &self.pty_session
     }
 }
 
-impl DerefMut for PtyBashSession {
+impl DerefMut for PtyReplSession {
     fn deref_mut(&mut self) -> &mut PtySession {
         &mut self.pty_session
     }
 }
 
-impl Drop for PtyBashSession {
+impl Drop for PtyReplSession {
+    /// for e.g. bash we *need* to run `quit` at the end.
+    /// if we leave that out, PtyProcess would try to kill the bash
+    /// which would not work, as a SIGTERM is not enough to kill bash
     fn drop(&mut self) {
-        // if we leave that out, PtyProcess would try to kill the bash
-        // which would not work, as a SIGTERM is not enough to kill bash
-        self.pty_session
-            .send_line("exit")
-            .expect("could not run `exit` on bash process");
+        if let Some(ref cmd) = self.quit_command {
+            self.pty_session
+                .send_line(&cmd)
+                .expect("could not run `exit` on bash process");
+        }
     }
 }
 
@@ -320,7 +356,7 @@ impl Drop for PtyBashSession {
 /// Also: if you start a program you should use `execute` and not `send_line`.
 ///
 /// For an example see the README
-pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyBashSession> {
+pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
     // unfortunately working with a temporary tmpfile is the only
     // way to guarantee that we are "in step" with the prompt
     // all other attempts were futile, especially since we cannot
@@ -337,9 +373,11 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyBashSession> {
     c.args(&["--rcfile", rcfile.path().to_str().unwrap_or_else(|| return "temp file does not exist".into())]);
     spawn_command(c, timeout).and_then(|p| {
         let new_prompt = "[REXPECT_PROMPT>";
-        let mut pb = PtyBashSession {
+        let mut pb = PtyReplSession {
             prompt: new_prompt.to_string(),
             pty_session: p,
+            quit_command: Some("quit".to_string()),
+            echo_on: false,
         };
         pb.exp_string("~~~~")?;
         rcfile.close().chain_err(|| "cannot delete temporary rcfile")?;
@@ -347,6 +385,17 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyBashSession> {
         // wait until the new prompt appears
         pb.wait_for_prompt()?;
         Ok(pb)
+    })
+}
+
+pub fn spawn_python(timeout: Option<u64>) -> Result<PtyReplSession> {
+    spawn_command(Command::new("python"), timeout).and_then(|p| {
+        Ok(PtyReplSession {
+            prompt: ">>> ".to_string(),
+            pty_session: p,
+            quit_command: Some("exit()".to_string()),
+            echo_on: true,
+        })
     })
 }
 

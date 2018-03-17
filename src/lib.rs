@@ -86,7 +86,7 @@ pub mod process;
 pub mod session;
 pub mod reader;
 
-pub use session::{spawn, spawn_bash};
+pub use session::{spawn, spawn_bash, spawn_python};
 pub use reader::ReadUntil;
 
 #[macro_use]

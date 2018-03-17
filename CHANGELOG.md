@@ -3,11 +3,25 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.4.0] 2018-03-17
+
+### Changed
+
+- breaking: PtyBashSession was renamed and generalized into
+  PtyReplSession to allow an interface for other REPLs 
+- better error messages in case of timeout to help debug when you expect
+  strings which you *think* are there, but are e.g. intermixed with newlines
+  or ctrl characters: newlines are printed as `\n`, carriage returns as `\r`
+  and control characters as `^`
+- new: `session::spawn_python`, just as a proof of concept and documentation really,
+  I don't think this will be used.. 
+
 ## [0.3.0] 2017-10-05
 
 ### Changed
 
-- execute takes string to wait for as second argument (before it waited 10ms which was way too fragile)
+- breaking: `execute` takes string to wait for as second argument 
+  (before it waited 10ms which was way too fragile)
 - if process doesn't end on SIGTERM a `kill -9` is sent after timeout is elapsed
 
 ### Fixed
