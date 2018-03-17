@@ -256,7 +256,7 @@ impl PtyReplSession {
     }
 
     /// Send cmd to repl and:
-    /// 1. wait for the cmd to be echoed (if echo_on=true)
+    /// 1. wait for the cmd to be echoed (if `echo_on == true`)
     /// 2. wait for the ready string being present
     ///
     /// Q: Why can't I just do `send_line` and immediately continue?
@@ -388,6 +388,9 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
     })
 }
 
+/// Spawn the python shell
+///
+/// This is just a proof of concept implementation (and serves for documentation purposes)
 pub fn spawn_python(timeout: Option<u64>) -> Result<PtyReplSession> {
     spawn_command(Command::new("python"), timeout).and_then(|p| {
         Ok(PtyReplSession {
