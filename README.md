@@ -14,7 +14,11 @@ Components include:
 
 The goal is to offer a similar set of functionality as [pexpect](https://pexpect.readthedocs.io/en/stable/overview.html).
 
-# Basic usage
+## Examples
+
+[For more examples, check the examples directory.](https://github.com/philippkeller/rexpect/tree/master/examples)
+
+### Basic usage
 
 Add this to your `Cargo.toml`
 
@@ -53,7 +57,7 @@ fn main() {
 }
 ```
 
-# Example with bash and reading from programs
+### Example with bash and reading from programs
 
 
 ```rust
@@ -97,7 +101,7 @@ fn main() {
 
 ```
 
-# Example with bash and job control
+### Example with bash and job control
 
 One frequent bitfall with sending ctrl-c and friends is that you need
 to somehow ensure that the program has fully loaded, otherwise the ctrl-*
@@ -138,7 +142,7 @@ fn main() {
 
 ```
 
-# Project Status
+## Project Status
 
 Rexpect covers more or less the features of pexpect. If you miss anything
 I'm happy to receive PRs or also Issue requests of course.
@@ -149,7 +153,7 @@ rust stable, beta and nightly on both Linux or Mac.
 That said, I don't know of too many people using it yet, so use this
 with caution.  
 
-# Design decisions
+## Design decisions
 
 - use error handling of [error-chain](https://github.com/brson/error-chain)
 - use [nix](https://github.com/nix-rust/nix) (and avoid libc wherever possible) to keep the code safe and clean
