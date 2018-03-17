@@ -156,3 +156,5 @@ with caution.
 - use error handling of [error-chain](https://github.com/brson/error-chain)
 - use [nix](https://github.com/nix-rust/nix) (and avoid libc wherever possible) to keep the code safe and clean
 - sadly, `expect` is used in rust too prominently to unwrap `Option`s and `Result`s, use `exp_*` instead
+
+Licensed under [MIT License](LICENSE)
