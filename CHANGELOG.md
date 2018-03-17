@@ -14,7 +14,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   or ctrl characters: newlines are printed as `\n`, carriage returns as `\r`
   and control characters as `^`
 - new: `session::spawn_python`, just as a proof of concept and documentation really,
-  I don't think this will be used.. 
+  I don't think this will be used..
 
 ## [0.3.0] 2017-10-05
 
