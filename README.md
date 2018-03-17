@@ -3,6 +3,12 @@
 [![Released API docs](https://docs.rs/rexpect/badge.svg)](https://docs.rs/rexpect)
 [![Master API docs](https://img.shields.io/badge/docs-master-2f343b.svg)](http://philippkeller.github.io/rexpect)
 
+Spawn, control, and respond to expected patterns of child applications and processes, enabling the automation of interactions and testing.
+
+Components include:
+- **session**: start a new process and interact with it; primary module of rexpect.
+- **reader**: non-blocking reader, which supports waiting for strings, regex, and EOF.
+- **process**: spawn a process in a pty.
 
 The goal is to offer a similar set of functionality as [pexpect](https://pexpect.readthedocs.io/en/stable/overview.html).
 
