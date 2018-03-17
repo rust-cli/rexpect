@@ -1,17 +1,10 @@
 language: rust
-sudo: false
 
 rust:
   - nightly
   - beta
   - stable
 
-before_script:
-  - pip install 'travis-cargo<0.2' --user
-  - export PATH=$HOME/.local/bin:$PATH
-
-# Only while the returning Err() in drop() causes OSX on Travis
-# to kill the process with -9 (or whatever..)
 matrix:
   allow_failures:
     - rust: nightly
@@ -20,16 +13,6 @@ matrix:
 os:
   - linux
   - osx
-
-script:
-  - cargo build --verbose
-  - cargo test --verbose -- --nocapture
-  - |
-      if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-        travis-cargo build &&
-        travis-cargo test &&
-        travis-cargo --only stable doc;
-      fi
 
 after_success:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then travis-cargo --only stable doc-upload; fi
