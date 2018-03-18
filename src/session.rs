@@ -184,6 +184,17 @@ impl PtySession {
     }
 }
 
+/// Turn e.g. "prog arg1 arg2" into ["prog", "arg1", "arg2"]
+/// Also takes care of single and double quotes
+fn tokenize_command(program: &str) -> Vec<String> {
+    let re = Regex::new(r#""[^"]+"|'[^']+'|[^'" ]+"#).unwrap();
+    let mut res = vec![];
+    for cap in re.captures_iter(program) {
+        res.push(cap[0].to_string());
+    }
+    res
+}
+
 /// Start command in background in a pty session (pty fork) and return a struct
 /// with writer and buffered reader (for unblocking reads).
 ///
@@ -199,8 +210,9 @@ impl PtySession {
 ///   For automation 30'000 (30s, the default in pexpect) is a good value.
 pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession> {
     let command = if program.find(" ").is_some() {
-        let mut parts = program.split(" ");
-        let mut cmd = Command::new(parts.next().unwrap());
+        let mut parts = tokenize_command(program);
+        let mut cmd = Command::new(&parts[0].to_string());
+        parts.remove(0);
         cmd.args(parts);
         cmd
     } else {
@@ -521,5 +533,20 @@ mod tests {
             Ok(())
         }()
                 .unwrap_or_else(|e| panic!("test_bash_control_chars failed: {}", e));
+    }
+
+    #[test]
+    fn test_tokenize_command() {
+        let res = tokenize_command("prog arg1 arg2");
+        assert_eq!(vec!["prog", "arg1", "arg2"], res);
+
+        let res = tokenize_command("prog -k=v");
+        assert_eq!(vec!["prog", "-k=v"], res);
+
+        let res = tokenize_command("prog 'my text'");
+        assert_eq!(vec!["prog", "'my text'"], res);
+
+        let res = tokenize_command(r#"prog "my text""#);
+        assert_eq!(vec!["prog", r#""my text""#], res);
     }
 }

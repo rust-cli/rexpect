@@ -16,6 +16,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - new: `session::spawn_python`, just as a proof of concept and documentation really,
   I don't think this will be used..
 
+### Fixed
+
+- `spawn()` now parses single/doublequotes better. E.g. `ed -p '> '` is
+  now tokenized into `["ed", "-p" "'> '"]`
+
 ## [0.3.0] 2017-10-05
 
 ### Changed
