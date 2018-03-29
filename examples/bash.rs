@@ -5,7 +5,7 @@ use rexpect::errors::*;
 
 fn run() -> Result<()> {
     let mut p = spawn_bash(Some(1000))?;
-    p.execute("ping 8.8.8.8", "bytes of data")?;
+    p.execute("ping 8.8.8.8", "bytes")?;
     p.send_control('z')?;
     p.wait_for_prompt()?;
     // bash writes 'ping 8.8.8.8' to stdout again to state which job was put into background
