@@ -7,7 +7,7 @@ use std::os::unix::process::CommandExt;
 use std::os::unix::io::{FromRawFd, AsRawFd};
 use std::{thread, time};
 use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
-use nix::fcntl::{O_RDWR, open};
+use nix::fcntl::{OFlag, open};
 use nix;
 use nix::sys::{stat, termios};
 use nix::unistd::{fork, ForkResult, setsid, dup, dup2, Pid};
@@ -93,7 +93,7 @@ impl PtyProcess {
     pub fn new(mut command: Command) -> Result<Self> {
         || -> nix::Result<Self> {
             // Open a new PTY master
-            let master_fd = posix_openpt(O_RDWR)?;
+            let master_fd = posix_openpt(OFlag::O_RDWR)?;
 
             // Allow a slave to be generated for it
             grantpt(&master_fd)?;
@@ -106,7 +106,7 @@ impl PtyProcess {
                 ForkResult::Child => {
                     setsid()?; // create new session with child as session leader
                     let slave_fd = open(std::path::Path::new(&slave_name),
-                                        O_RDWR,
+                                        OFlag::O_RDWR,
                                         stat::Mode::empty())?;
 
                     // assign stdin, stdout, stderr to the tty, just like a terminal does
@@ -116,7 +116,7 @@ impl PtyProcess {
 
                     // set echo off
                     let mut flags = termios::tcgetattr(STDIN_FILENO)?;
-                    flags.local_flags &= !termios::ECHO;
+                    flags.local_flags &= !termios::LocalFlags::ECHO;
                     termios::tcsetattr(STDIN_FILENO, termios::SetArg::TCSANOW, &flags)?;
 
                     command.exec();
@@ -171,7 +171,7 @@ impl PtyProcess {
     /// ```
     ///
     pub fn status(&self) -> Option<(wait::WaitStatus)> {
-        if let Ok(status) = wait::waitpid(self.child_pid, Some(wait::WNOHANG)) {
+        if let Ok(status) = wait::waitpid(self.child_pid, Some(wait::WaitPidFlag::WNOHANG)) {
             Some(status)
         } else {
             None
@@ -210,7 +210,7 @@ impl PtyProcess {
             match signal::kill(self.child_pid, sig) {
                 Ok(_) => {}
                 // process was already killed before -> ignore
-                Err(nix::Error::Sys(nix::Errno::ESRCH)) => {
+                Err(nix::Error::Sys(nix::errno::Errno::ESRCH)) => {
                     return Ok(wait::WaitStatus::Exited(Pid::from_raw(0), 0))
                 }
                 Err(e) => return Err(format!("kill resulted in error: {:?}", e).into()),
