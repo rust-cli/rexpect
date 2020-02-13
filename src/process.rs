@@ -75,10 +75,10 @@ fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
     use nix::libc::{ioctl, TIOCPTYGNAME};
 
     // the buffer size on OSX is 128, defined by sys/ttycom.h
-    let buf: [i8; 128] = [0; 128];
+    let mut buf: [i8; 128] = [0; 128];
 
     unsafe {
-        match ioctl(fd.as_raw_fd(), TIOCPTYGNAME as u64, &buf) {
+        match ioctl(fd.as_raw_fd(), TIOCPTYGNAME as u64, &mut buf) {
             0 => {
                 let res = CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned();
                 Ok(res)
