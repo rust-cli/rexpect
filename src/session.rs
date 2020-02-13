@@ -44,7 +44,7 @@ impl PtySession {
     ///
     /// this is guaranteed to be flushed to the process
     /// returns number of written bytes
-    pub fn send_line(&mut self, line: &str) -> Result<(usize)> {
+    pub fn send_line(&mut self, line: &str) -> Result<usize> {
         let mut len = self.send(line)?;
         len += self.writer
             .write(&['\n' as u8])
@@ -57,7 +57,7 @@ impl PtySession {
     /// need to call `flush()` after `send()` to make the process actually see your input.
     ///
     /// Returns number of written bytes
-    pub fn send(&mut self, s: &str) -> Result<(usize)> {
+    pub fn send(&mut self, s: &str) -> Result<usize> {
         self.writer
             .write(s.as_bytes())
             .chain_err(|| "cannot write line to process")
@@ -69,8 +69,8 @@ impl PtySession {
     /// E.g. `send_control('c')` sends ctrl-c. Upper/smaller case does not matter.
     pub fn send_control(&mut self, c: char) -> Result<()> {
         let code = match c {
-            'a'...'z' => c as u8 + 1 - 'a' as u8,
-            'A'...'Z' => c as u8 + 1 - 'A' as u8,
+            'a'..='z' => c as u8 + 1 - 'a' as u8,
+            'A'..='Z' => c as u8 + 1 - 'A' as u8,
             '[' => 27,
             '\\' => 28,
             ']' => 29,
@@ -145,7 +145,7 @@ impl PtySession {
 
     /// Wait until provided string is seen on stdout of child process.
     /// Return the yet unread output (without the matched string)
-    pub fn exp_string(&mut self, needle: &str) -> Result<(String)> {
+    pub fn exp_string(&mut self, needle: &str) -> Result<String> {
         self.exp(&ReadUntil::String(needle.to_string()))
             .and_then(|(s, _)| Ok(s))
     }
@@ -308,7 +308,7 @@ impl PtyReplSession {
     /// send line to repl (and flush output) and then, if echo_on=true wait for the
     /// input to appear.
     /// Return: number of bytes written
-    pub fn send_line(&mut self, line: &str) -> Result<(usize)> {
+    pub fn send_line(&mut self, line: &str) -> Result<usize> {
         let bytes_written = self.pty_session.send_line(line)?;
         if self.echo_on {
             self.exp_string(line)?;
@@ -499,7 +499,7 @@ mod tests {
             let mut p = spawn_bash(Some(1000))?;
             p.execute("cat <(echo ready) -", "ready")?;
             Ok(())
-        }().unwrap_or_else(|e| panic!("test_kill_timeout failed: {}", e));;
+        }().unwrap_or_else(|e| panic!("test_kill_timeout failed: {}", e));
         // p is dropped here and kill is sent immediatly to bash
         // Since that is not enough to make bash exit, a kill -9 is sent within 1s (timeout)
     }
