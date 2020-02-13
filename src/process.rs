@@ -74,7 +74,7 @@ fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
     use std::os::unix::io::AsRawFd;
     use nix::libc::{ioctl, TIOCPTYGNAME};
 
-    /// the buffer size on OSX is 128, defined by sys/ttycom.h
+    // the buffer size on OSX is 128, defined by sys/ttycom.h
     let buf: [i8; 128] = [0; 128];
 
     unsafe {
@@ -170,7 +170,7 @@ impl PtyProcess {
     /// # }
     /// ```
     ///
-    pub fn status(&self) -> Option<(wait::WaitStatus)> {
+    pub fn status(&self) -> Option<wait::WaitStatus> {
         if let Ok(status) = wait::waitpid(self.child_pid, Some(wait::WaitPidFlag::WNOHANG)) {
             Some(status)
         } else {
@@ -180,7 +180,7 @@ impl PtyProcess {
 
     /// Wait until process has exited. This is a blocking call.
     /// If the process doesn't terminate this will block forever.
-    pub fn wait(&self) -> Result<(wait::WaitStatus)> {
+    pub fn wait(&self) -> Result<wait::WaitStatus> {
         wait::waitpid(self.child_pid, None).chain_err(|| "wait: cannot read status")
     }
 

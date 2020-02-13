@@ -6,7 +6,7 @@ use rexpect::spawn;
 use rexpect::session::PtyReplSession;
 use rexpect::errors::*;
 
-fn ed_session() -> Result<(PtyReplSession)> {
+fn ed_session() -> Result<PtyReplSession> {
     let mut ed = PtyReplSession {
         // for `echo_on` you need to figure that out by trial and error.
         // For bash and python repl it is false
