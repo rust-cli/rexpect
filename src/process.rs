@@ -151,7 +151,7 @@ impl PtyProcess {
     /// Get status of child process, nonblocking.
     ///
     /// This method runs waitpid on the process.
-    /// This means: If you ran `exit()` before or `status()` tihs method will
+    /// This means: If you ran `exit()` before or `status()` this method will
     /// return an Error
     ///
     /// # Example
