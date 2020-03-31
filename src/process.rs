@@ -13,7 +13,7 @@ use nix::sys::{stat, termios};
 use nix::unistd::{fork, ForkResult, setsid, dup, dup2, Pid};
 use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 pub use nix::sys::{wait, signal};
-use errors::*; // load error-chain
+use crate::errors::*; // load error-chain
 
 
 /// Start a process in a forked tty so you can interact with it the same as you would

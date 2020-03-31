@@ -5,7 +5,7 @@ use std::io::prelude::*;
 use std::sync::mpsc::{channel, Receiver};
 use std::{thread, result};
 use std::{time, fmt};
-use errors::*; // load error-chain
+use crate::errors::*; // load error-chain
 pub use regex::Regex;
 
 #[derive(Debug)]
