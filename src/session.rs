@@ -1,14 +1,14 @@
 //! Main module of rexpect: start new process and interact with it
 
-use process::PtyProcess;
-use reader::{NBReader, Regex};
-pub use reader::ReadUntil;
+use crate::process::PtyProcess;
+use crate::reader::{NBReader, Regex};
+pub use crate::reader::ReadUntil;
 use std::fs::File;
 use std::io::LineWriter;
 use std::process::Command;
 use std::io::prelude::*;
 use std::ops::{Deref, DerefMut};
-use errors::*; // load error-chain
+use crate::errors::*; // load error-chain
 use tempfile;
 
 /// Interact with a process with read/write/signals, etc.
@@ -424,8 +424,8 @@ mod tests {
             let mut s = spawn("cat", Some(1000))?;
             s.send_line("hans")?;
             assert_eq!("hans", s.read_line()?);
-            let should = ::process::wait::WaitStatus::Signaled(s.process.child_pid,
-                                                               ::process::signal::Signal::SIGTERM,
+            let should = crate::process::wait::WaitStatus::Signaled(s.process.child_pid,
+                                                               crate::process::signal::Signal::SIGTERM,
                                                                false);
             assert_eq!(should, s.process.exit()?);
             Ok(())
