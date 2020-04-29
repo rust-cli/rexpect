@@ -87,17 +87,16 @@ pub use reader::ReadUntil;
 
 pub mod errors {
     use std::time;
-    use crate::process::wait;
     // Create the Error, ErrorKind, ResultExt, and Result types
     error_chain::error_chain!{
         errors {
-            EOF(expected:String, got:String, exit_code:Option<wait::WaitStatus>) {
+            EOF(expected:String, got:String, exit_code:Option<String>) {
                 description("End of filestream (usually stdout) occurred, most probably\
                              because the process terminated")
                 display("EOF (End of File): Expected {} but got EOF after reading \"{}\", \
                              process terminated with {:?}", expected, got,
-                             exit_code.map(|status| format!("{:?}", status))
-                             .unwrap_or("unknown".to_string()))
+                             exit_code.as_ref()
+                             .unwrap_or(& "unknown".to_string()))
             }
             BrokenPipe {
                 description("The pipe to the process is broken. Most probably because\
