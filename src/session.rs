@@ -441,8 +441,6 @@ pub fn spawn_python(timeout: Option<u64>) -> Result<PtyReplSession> {
 }
 
 /// Spawn a REPL from a stream
-///
-/// This is just a proof of concept implementation (and serves for documentation purposes)
 pub fn spawn_stream<R: Read + Send + 'static, W: Write>(reader: R, writer: W, timeout_ms: Option<u64>) -> StreamSession<W> {
     StreamSession::new(reader, writer, timeout_ms)
 }
