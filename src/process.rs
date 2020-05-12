@@ -88,6 +88,12 @@ fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
     }
 }
 
+mod ioctl {
+    use nix::libc::{winsize, TIOCSWINSZ};
+    use nix::*;
+    ioctl_write_ptr_bad!(tiocswinsz, TIOCSWINSZ, winsize);
+}
+
 impl PtyProcess {
     /// Start a process in a forked pty
     pub fn new(mut command: Command) -> Result<Self> {
@@ -118,6 +124,15 @@ impl PtyProcess {
                     let mut flags = termios::tcgetattr(STDIN_FILENO)?;
                     flags.local_flags &= !termios::LocalFlags::ECHO;
                     termios::tcsetattr(STDIN_FILENO, termios::SetArg::TCSANOW, &flags)?;
+
+                    // set window size
+                    unsafe { ioctl::tiocswinsz(STDIN_FILENO,
+                        &nix::libc::winsize {
+                            ws_row: 80,
+                            ws_col: 25,
+                            ws_xpixel: 0,
+                            ws_ypixel: 0,
+                        })}?;
 
                     command.exec();
                     Err(nix::Error::last())
