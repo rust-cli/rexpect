@@ -209,15 +209,10 @@ fn tokenize_command(program: &str) -> Vec<String> {
 ///   error message indicating where it stopped.
 ///   For automation 30'000 (30s, the default in pexpect) is a good value.
 pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession> {
-    let command = if program.find(" ").is_some() {
-        let mut parts = tokenize_command(program);
-        let mut cmd = Command::new(&parts[0].to_string());
-        parts.remove(0);
-        cmd.args(parts);
-        cmd
-    } else {
-        Command::new(program)
-    };
+    let mut parts = tokenize_command(program);
+    let prog = parts.remove(0);
+    let mut command = Command::new(prog);
+    command.args(parts);
     spawn_command(command, timeout_ms)
 }
 
