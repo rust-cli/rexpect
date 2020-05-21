@@ -494,6 +494,16 @@ mod tests {
     }
 
     #[test]
+    fn test_expect_empty_command_error() {
+        let p = spawn("", Some(1000));
+        match p {
+            Ok(_) => assert!(false, "should raise an error"),
+            Err(Error(ErrorKind::EmptyProgramName, _)) => {}
+            Err(_) => assert!(false, "should raise EmptyProgramName"),
+        }
+    }
+
+    #[test]
     fn test_kill_timeout() {
         || -> Result<()> {
             let mut p = spawn_bash(Some(1000))?;
