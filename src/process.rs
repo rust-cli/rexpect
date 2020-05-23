@@ -152,21 +152,21 @@ impl PtyProcess {
     ///
     /// This method runs waitpid on the process.
     /// This means: If you ran `exit()` before or `status()` this method will
-    /// return an Error
+    /// return `None`
     ///
     /// # Example
     /// ```rust,no_run
     ///
     /// # extern crate rexpect;
-    /// use rexpect::process;
+    /// use rexpect::process::{self, wait::WaitStatus};
     /// use std::process::Command;
     ///
     /// # fn main() {
-    ///     let cmd = Command::new("/path/to/myprog");
-    ///     let process = process::PtyProcess::new(cmd).expect("could not execute myprog");
-    ///     while process.status().unwrap() == process::wait::WaitStatus::StillAlive {
-    ///         // do something
-    ///     }
+    /// let cmd = Command::new("/path/to/myprog");
+    /// let process = process::PtyProcess::new(cmd).expect("could not execute myprog");
+    /// while let Some(WaitStatus::StillAlive) = process.status() {
+    ///     // do something
+    /// }
     /// # }
     /// ```
     ///
