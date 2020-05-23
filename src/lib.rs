@@ -110,6 +110,10 @@ pub mod errors {
                         expected, got, (timeout.as_secs() * 1000) as u32
                         + timeout.subsec_nanos() / 1_000_000)
             }
+            EmptyProgramName {
+                description("The provided program name is empty.")
+                display("EmptyProgramName")
+            }
         }
     }
 }

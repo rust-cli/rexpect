@@ -209,6 +209,10 @@ fn tokenize_command(program: &str) -> Vec<String> {
 ///   error message indicating where it stopped.
 ///   For automation 30'000 (30s, the default in pexpect) is a good value.
 pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession> {
+    if program.is_empty() {
+        return Err(ErrorKind::EmptyProgramName.into());
+    }
+
     let mut parts = tokenize_command(program);
     let prog = parts.remove(0);
     let mut command = Command::new(prog);
@@ -486,6 +490,16 @@ mod tests {
             Ok(())
         }()
                 .unwrap_or_else(|e| panic!("test_expect_any failed: {}", e));
+    }
+
+    #[test]
+    fn test_expect_empty_command_error() {
+        let p = spawn("", Some(1000));
+        match p {
+            Ok(_) => assert!(false, "should raise an error"),
+            Err(Error(ErrorKind::EmptyProgramName, _)) => {}
+            Err(_) => assert!(false, "should raise EmptyProgramName"),
+        }
     }
 
     #[test]
