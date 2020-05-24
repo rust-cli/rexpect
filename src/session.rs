@@ -99,6 +99,17 @@ impl PtySession {
         }
     }
 
+    // wrapper around reader::read_until to give more context for errors
+    fn exp_any_wrapper(&mut self, needle: Vec<ReadUntil>) -> Result<(String, String, usize)> {
+        match self.reader.read_until_any(needle) {
+            Ok(s) => Ok(s),
+            Err(Error(ErrorKind::EOF(expected, got, _), _)) => {
+                Err(ErrorKind::EOF(expected, got, self.process.status()).into())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     /// Make sure all bytes written via `send()` are sent to the process
     pub fn flush(&mut self) -> Result<()> {
         self.writer.flush().chain_err(|| "could not flush")
@@ -179,8 +190,8 @@ impl PtySession {
     ///     # }().expect("test failed");
     /// # }
     /// ```
-    pub fn exp_any(&mut self, needles: Vec<ReadUntil>) -> Result<(String, String)> {
-        self.exp(&ReadUntil::Any(needles))
+    pub fn exp_any(&mut self, needles: Vec<ReadUntil>) -> Result<(String, String, usize)> {
+        self.exp_any_wrapper(needles)
     }
 }
 
@@ -483,8 +494,8 @@ mod tests {
         || -> Result<()> {
             let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
             p.send_line("Hi")?;
-            match p.exp_any(vec![ReadUntil::NBytes(3), ReadUntil::String("Hi".to_string())]) {
-                Ok(s) => assert_eq!(("".to_string(), "Hi\r".to_string()), s),
+            match p.exp_any(vec![ReadUntil::String("Bye".to_string()), ReadUntil::String("Hi".to_string())]) {
+                Ok(s) => assert_eq!(("".to_string(), "Hi".to_string(), 1), s),
                 Err(e) => assert!(false, format!("got error: {}", e)),
             }
             Ok(())

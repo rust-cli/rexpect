@@ -93,6 +93,15 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
     }
 }
 
+pub fn find_any(needle: &Vec<ReadUntil>, buffer: &str, eof: bool) -> Option<(usize, usize, usize)> {
+    for (pos, read_until) in needle.iter().enumerate() {
+        if let Some((before, after)) = find(&read_until, buffer, eof) {
+            return Some((before, after, pos));
+        }
+    }
+    None
+}
+
 /// Non blocking reader
 ///
 /// Typically you'd need that to check for output of a process without blocking your thread.
@@ -222,14 +231,55 @@ impl NBReader {
     /// ```
     ///
     pub fn read_until(&mut self, needle: &ReadUntil) -> Result<(String, String)> {
+        match self.read_until_tuple_pos(needle) {
+            Ok(tuple_pos) => {
+                let first = self.buffer.drain(..tuple_pos.0).collect();
+                let second = self.buffer.drain(..tuple_pos.1 - tuple_pos.0).collect();
+                Ok((first, second))
+            },
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Read until any needle is found (blocking!) and return tuple with:
+    /// 1. yet unread string until and without needle
+    /// 2. matched needle
+    /// 3. index of which needle is found
+    /// 
+    /// this is the same function as read_until with the difference that the index
+    /// is also returned
+    pub fn read_until_any(&mut self, needle: Vec<ReadUntil>) -> Result<(String, String, usize)> {
+        match self.read_until_tuple_pos(&ReadUntil::Any(needle)) {
+            Ok(tuple_pos) => {
+                let first = self.buffer.drain(..tuple_pos.0).collect();
+                let second = self.buffer.drain(..tuple_pos.1 - tuple_pos.0).collect();
+                Ok((first, second, tuple_pos.2))
+            },
+            Err(e) => Err(e),
+        }
+    }
+    /// Read until needle is found and return
+    /// 1. yet unread string until and without needle
+    /// 2. matched needle
+    /// 3. index of which needle is found. This is only making sense for ReadUntil::Any
+    ///    for the other types this is redundant but I didn't find any more elegant way
+    ///    to solve this.
+    fn read_until_tuple_pos(&mut self, needle: &ReadUntil) -> Result<(usize, usize, usize)> {
         let start = time::Instant::now();
 
         loop {
             self.read_into_buffer()?;
-            if let Some(tuple_pos) = find(needle, &self.buffer, self.eof) {
-                let first = self.buffer.drain(..tuple_pos.0).collect();
-                let second = self.buffer.drain(..tuple_pos.1 - tuple_pos.0).collect();
-                return Ok((first, second));
+            match needle {
+                ReadUntil::Any(n) => {
+                    if let Some(tuple_pos) = find_any(n, &self.buffer, self.eof) {
+                        return Ok(tuple_pos)
+                    }
+                }
+                needle => {
+                    if let Some((before, after)) = find(needle, &self.buffer, self.eof) {
+                        return Ok((before, after, 0))
+                    }
+                }
             }
 
             // reached end of stream and didn't match -> error
