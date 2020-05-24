@@ -204,7 +204,7 @@ dependencies = [
 
 [[package]]
 name = "rexpect"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "error-chain 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "nix 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
