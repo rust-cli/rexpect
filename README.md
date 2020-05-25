@@ -148,9 +148,6 @@ I'm happy to receive PRs or also Issue requests of course.
 The tests cover most of the aspects and it should run out of the box for
 rust stable, beta and nightly on both Linux or Mac.
 
-That said, I don't know of too many people using it yet, so use this
-with caution.  
-
 ## Design decisions
 
 - use error handling of [error-chain](https://github.com/brson/error-chain)
