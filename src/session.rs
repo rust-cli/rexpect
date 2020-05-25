@@ -11,35 +11,19 @@ use std::ops::{Deref, DerefMut};
 use crate::errors::*; // load error-chain
 use tempfile;
 
-/// Interact with a process with read/write/signals, etc.
-#[allow(dead_code)]
-pub struct PtySession {
-    pub process: PtyProcess,
-    pub writer: LineWriter<File>,
+pub struct StreamSession<W: Write> {
+    pub writer: LineWriter<W>,
     pub reader: NBReader,
-    pub commandname: String, // only for debugging purposes now
 }
 
-/// Start a process in a tty session, write and read from it
-///
-/// # Example
-///
-/// ```
-///
-/// use rexpect::spawn;
-/// # use rexpect::errors::*;
-///
-/// # fn main() {
-///     # || -> Result<()> {
-/// let mut s = spawn("cat", Some(1000))?;
-/// s.send_line("hello, polly!")?;
-/// let line = s.read_line()?;
-/// assert_eq!("hello, polly!", line);
-///         # Ok(())
-///     # }().expect("test failed");
-/// # }
-/// ```
-impl PtySession {
+impl<W: Write> StreamSession<W> {
+    pub fn new<R: Read + Send + 'static>(reader: R, writer: W, timeout_ms: Option<u64>) -> Self {
+        Self {
+            writer: LineWriter::new(writer),
+            reader: NBReader::new(reader, timeout_ms),
+        }
+    }
+
     /// sends string and a newline to process
     ///
     /// this is guaranteed to be flushed to the process
@@ -88,16 +72,6 @@ impl PtySession {
         Ok(())
     }
 
-    // wrapper around reader::read_until to give more context for errors
-    fn exp(&mut self, needle: &ReadUntil) -> Result<(String, String)> {
-        match self.reader.read_until(needle) {
-            Ok(s) => Ok(s),
-            Err(Error(ErrorKind::EOF(expected, got, _), _)) => {
-                Err(ErrorKind::EOF(expected, got, self.process.status()).into())
-            }
-            Err(e) => Err(e),
-        }
-    }
 
     /// Make sure all bytes written via `send()` are sent to the process
     pub fn flush(&mut self) -> Result<()> {
@@ -122,6 +96,11 @@ impl PtySession {
     /// otherwise. This is nonblocking.
     pub fn try_read(&mut self) -> Option<char> {
         self.reader.try_read()
+    }
+
+    // wrapper around reader::read_until to give more context for errors
+    fn exp(&mut self, needle: &ReadUntil) -> Result<(String, String)> {
+        self.reader.read_until(needle)
     }
 
     /// Wait until we see EOF (i.e. child process has terminated)
@@ -183,6 +162,61 @@ impl PtySession {
         self.exp(&ReadUntil::Any(needles))
     }
 }
+/// Interact with a process with read/write/signals, etc.
+#[allow(dead_code)]
+pub struct PtySession {
+    pub process: PtyProcess,
+    pub stream: StreamSession<File>,
+    pub commandname: String, // only for debugging purposes now
+}
+
+
+// make StreamSession's methods available directly
+impl Deref for PtySession {
+    type Target = StreamSession<File>;
+    fn deref(&self) -> &StreamSession<File> {
+        &self.stream
+    }
+}
+
+impl DerefMut for PtySession {
+    fn deref_mut(&mut self) -> &mut StreamSession<File> {
+        &mut self.stream
+    }
+}
+
+/// Start a process in a tty session, write and read from it
+///
+/// # Example
+///
+/// ```
+///
+/// use rexpect::spawn;
+/// # use rexpect::errors::*;
+///
+/// # fn main() {
+///     # || -> Result<()> {
+/// let mut s = spawn("cat", Some(1000))?;
+/// s.send_line("hello, polly!")?;
+/// let line = s.read_line()?;
+/// assert_eq!("hello, polly!", line);
+///         # Ok(())
+///     # }().expect("test failed");
+/// # }
+/// ```
+impl PtySession {
+    fn new(process: PtyProcess, timeout_ms: Option<u64>, commandname: String) -> Result<Self> {
+        
+        let f = process.get_file_handle();
+        let reader = f.try_clone().chain_err(|| "couldn't open write stream")?;
+        let stream = StreamSession::new(reader, f, timeout_ms);
+        Ok(Self {
+            process,
+            stream,
+            commandname: commandname,
+        })
+    }
+}
 
 /// Turn e.g. "prog arg1 arg2" into ["prog", "arg1", "arg2"]
 /// Also takes care of single and double quotes
@@ -227,15 +261,7 @@ pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySes
         .chain_err(|| "couldn't start process")?;
     process.set_kill_timeout(timeout_ms);
 
-    let f = process.get_file_handle();
-    let writer = LineWriter::new(f.try_clone().chain_err(|| "couldn't open write stream")?);
-    let reader = NBReader::new(f, timeout_ms);
-    Ok(PtySession {
-           process: process,
-           writer: writer,
-           reader: reader,
-           commandname: commandname,
-       })
+    PtySession::new(process, timeout_ms, commandname)
 }
 
 /// A repl session: e.g. bash or the python shell:
@@ -411,6 +437,11 @@ pub fn spawn_python(timeout: Option<u64>) -> Result<PtyReplSession> {
             echo_on: true,
         })
     })
+}
+
+/// Spawn a REPL from a stream
+pub fn spawn_stream<R: Read + Send + 'static, W: Write>(reader: R, writer: W, timeout_ms: Option<u64>) -> StreamSession<W> {
+    StreamSession::new(reader, writer, timeout_ms)
 }
 
 #[cfg(test)]
