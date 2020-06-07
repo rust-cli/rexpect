@@ -1,8 +1,7 @@
 //! Main module of rexpect: start new process and interact with it
 
 use crate::process::PtyProcess;
-use crate::reader::{NBReader, Regex};
-pub use crate::reader::ReadUntil;
+use crate::reader::{NBReader, Regex, EOF, Needle, Str, Regx};
 use std::fs::File;
 use std::io::LineWriter;
 use std::process::Command;
@@ -89,7 +88,7 @@ impl PtySession {
     }
 
     // wrapper around reader::read_until to give more context for errors
-    fn exp(&mut self, needle: &ReadUntil) -> Result<(String, String)> {
+    pub fn exp<N: Needle + std::fmt::Display + ?Sized>(&mut self, needle: &N) -> Result<N::Interest> {
         match self.reader.read_until(needle) {
             Ok(s) => Ok(s),
             Err(Error(ErrorKind::EOF(expected, got, _), _)) => {
@@ -107,8 +106,8 @@ impl PtySession {
     /// Read one line (blocking!) and return line without the newline
     /// (waits until \n is in the output fetches the line and removes \r at the end if present)
     pub fn read_line(&mut self) -> Result<String> {
-        match self.exp(&ReadUntil::String('\n'.to_string())) {
-            Ok((mut line, _)) => {
+        match self.exp(&Str("\n")) {
+            Ok(mut line) => {
                 if line.ends_with('\r') {
                     line.pop().expect("this never happens");
                 }
@@ -127,7 +126,7 @@ impl PtySession {
     /// Wait until we see EOF (i.e. child process has terminated)
     /// Return all the yet unread output
     pub fn exp_eof(&mut self) -> Result<String> {
-        self.exp(&ReadUntil::EOF).and_then(|(_, s)| Ok(s))
+        self.exp(&EOF).and_then(|s| Ok(s))
     }
 
     /// Wait until provided regex is seen on stdout of child process.
@@ -138,7 +137,7 @@ impl PtySession {
     /// Note that `exp_regex("^foo")` matches the start of the yet consumed output.
     /// For matching the start of the line use `exp_regex("\nfoo")`
     pub fn exp_regex(&mut self, regex: &str) -> Result<(String, String)> {
-        let res = self.exp(&ReadUntil::Regex(Regex::new(regex).chain_err(|| "invalid regex")?))
+        let res = self.exp(&Regx(Regex::new(regex).chain_err(|| "invalid regex")?))
             .and_then(|s| Ok(s));
         res
     }
@@ -146,41 +145,13 @@ impl PtySession {
     /// Wait until provided string is seen on stdout of child process.
     /// Return the yet unread output (without the matched string)
     pub fn exp_string(&mut self, needle: &str) -> Result<String> {
-        self.exp(&ReadUntil::String(needle.to_string()))
-            .and_then(|(s, _)| Ok(s))
+        self.exp(&Str(needle))
     }
 
     /// Wait until provided char is seen on stdout of child process.
     /// Return the yet unread output (without the matched char)
     pub fn exp_char(&mut self, needle: char) -> Result<String> {
-        self.exp(&ReadUntil::String(needle.to_string()))
-            .and_then(|(s, _)| Ok(s))
-    }
-
-    /// Wait until any of the provided needles is found.
-    ///
-    /// Return a tuple with:
-    /// 1. the yet unread string, without the matching needle (empty in case of EOF and NBytes)
-    /// 2. the matched string
-    ///
-    /// # Example:
-    ///
-    /// ```
-    /// use rexpect::{spawn, ReadUntil};
-    /// # use rexpect::errors::*;
-    ///
-    /// # fn main() {
-    ///     # || -> Result<()> {
-    /// let mut s = spawn("cat", Some(1000))?;
-    /// s.send_line("hello, polly!")?;
-    /// s.exp_any(vec![ReadUntil::String("hello".into()),
-    ///                ReadUntil::EOF])?;
-    ///         # Ok(())
-    ///     # }().expect("test failed");
-    /// # }
-    /// ```
-    pub fn exp_any(&mut self, needles: Vec<ReadUntil>) -> Result<(String, String)> {
-        self.exp(&ReadUntil::Any(needles))
+        self.exp(&Str(needle.to_string()))
     }
 }
 
@@ -417,6 +388,7 @@ pub fn spawn_python(timeout: Option<u64>) -> Result<PtyReplSession> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::reader::{NBytes, Until, OrInterest};
 
     #[test]
     fn test_read_line() {
@@ -484,8 +456,31 @@ mod tests {
         || -> Result<()> {
             let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
             p.send_line("Hi")?;
-            match p.exp_any(vec![ReadUntil::NBytes(3), ReadUntil::String("Hi".to_string())]) {
-                Ok(s) => assert_eq!(("".to_string(), "Hi\r".to_string()), s),
+
+            let until = Until(NBytes(3)).or(Str("Hi"));
+
+            match p.exp(until.as_ref()) {
+                Ok(OrInterest::Lhs(s)) => assert_eq!("Hi\r".to_string(), s),
+                Ok(OrInterest::Rhs(_)) => assert!(false),
+                Err(e) => assert!(false, format!("got error: {}", e)),
+            }
+            Ok(())
+        }()
+                .unwrap_or_else(|e| panic!("test_expect_any failed: {}", e));
+    }
+
+    #[test]
+    fn test_expect_any_huge() {
+        || -> Result<()> {
+            let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
+            p.send_line("Hello World")?;
+
+            let until = Until(Str("Hi")).or(Str("World")).or(NBytes(3));
+
+            match p.exp(until.as_ref()) {
+                Ok(OrInterest::Lhs(OrInterest::Lhs(_))) => assert!(false),
+                Ok(OrInterest::Lhs(OrInterest::Rhs(s))) => assert_eq!("Hello ".to_string(), s),
+                Ok(OrInterest::Rhs(_)) => assert!(false),
                 Err(e) => assert!(false, format!("got error: {}", e)),
             }
             Ok(())
