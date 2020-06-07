@@ -10,35 +10,19 @@ use std::ops::{Deref, DerefMut};
 use std::process::Command;
 use tempfile;
 
-/// Interact with a process with read/write/signals, etc.
-#[allow(dead_code)]
-pub struct PtySession {
-    pub process: PtyProcess,
-    pub writer: LineWriter<File>,
+pub struct StreamSession<W: Write> {
+    pub writer: LineWriter<W>,
     pub reader: NBReader,
-    pub commandname: String, // only for debugging purposes now
 }
 
-/// Start a process in a tty session, write and read from it
-///
-/// # Example
-///
-/// ```
-///
-/// use rexpect::spawn;
-/// # use rexpect::errors::*;
-///
-/// # fn main() {
-///     # || -> Result<()> {
-/// let mut s = spawn("cat", Some(1000))?;
-/// s.send_line("hello, polly!")?;
-/// let line = s.read_line()?;
-/// assert_eq!("hello, polly!", line);
-///         # Ok(())
-///     # }().expect("test failed");
-/// # }
-/// ```
-impl PtySession {
+impl<W: Write> StreamSession<W> {
+    pub fn new<R: Read + Send + 'static>(reader: R, writer: W, timeout_ms: Option<u64>) -> Self {
+        Self {
+            writer: LineWriter::new(writer),
+            reader: NBReader::new(reader, timeout_ms),
+        }
+    }
+
     /// sends string and a newline to process
     ///
     /// this is guaranteed to be flushed to the process
@@ -123,6 +107,11 @@ impl PtySession {
         self.reader.try_read()
     }
 
+    // wrapper around reader::read_until to give more context for errors
+    fn exp(&mut self, needle: &ReadUntil) -> Result<(String, String)> {
+        self.reader.read_until(needle)
+    }
+
     /// Wait until we see EOF (i.e. child process has terminated)
     /// Return all the yet unread output
     pub fn exp_eof(&mut self) -> Result<String> {
@@ -154,6 +143,61 @@ impl PtySession {
         self.exp(&Str(needle.to_string()))
     }
 }
+/// Interact with a process with read/write/signals, etc.
+#[allow(dead_code)]
+pub struct PtySession {
+    pub process: PtyProcess,
+    pub stream: StreamSession<File>,
+    pub commandname: String, // only for debugging purposes now
+}
+
+
+// make StreamSession's methods available directly
+impl Deref for PtySession {
+    type Target = StreamSession<File>;
+    fn deref(&self) -> &StreamSession<File> {
+        &self.stream
+    }
+}
+
+impl DerefMut for PtySession {
+    fn deref_mut(&mut self) -> &mut StreamSession<File> {
+        &mut self.stream
+    }
+}
+
+/// Start a process in a tty session, write and read from it
+///
+/// # Example
+///
+/// ```
+///
+/// use rexpect::spawn;
+/// # use rexpect::errors::*;
+///
+/// # fn main() {
+///     # || -> Result<()> {
+/// let mut s = spawn("cat", Some(1000))?;
+/// s.send_line("hello, polly!")?;
+/// let line = s.read_line()?;
+/// assert_eq!("hello, polly!", line);
+///         # Ok(())
+///     # }().expect("test failed");
+/// # }
+/// ```
+impl PtySession {
+    fn new(process: PtyProcess, timeout_ms: Option<u64>, commandname: String) -> Result<Self> {
+        
+        let f = process.get_file_handle();
+        let reader = f.try_clone().chain_err(|| "couldn't open write stream")?;
+        let stream = StreamSession::new(reader, f, timeout_ms);
+        Ok(Self {
+            process,
+            stream,
+            commandname: commandname,
+        })
+    }
+}
 
 /// Turn e.g. "prog arg1 arg2" into ["prog", "arg1", "arg2"]
 /// Also takes care of single and double quotes
@@ -180,15 +224,14 @@ fn tokenize_command(program: &str) -> Vec<String> {
 ///   error message indicating where it stopped.
 ///   For automation 30'000 (30s, the default in pexpect) is a good value.
 pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession> {
-    let command = if program.find(" ").is_some() {
-        let mut parts = tokenize_command(program);
-        let mut cmd = Command::new(&parts[0].to_string());
-        parts.remove(0);
-        cmd.args(parts);
-        cmd
-    } else {
-        Command::new(program)
-    };
+    if program.is_empty() {
+        return Err(ErrorKind::EmptyProgramName.into());
+    }
+
+    let mut parts = tokenize_command(program);
+    let prog = parts.remove(0);
+    let mut command = Command::new(prog);
+    command.args(parts);
     spawn_command(command, timeout_ms)
 }
 
@@ -395,6 +438,11 @@ pub fn spawn_python(timeout: Option<u64>) -> Result<PtyReplSession> {
     })
 }
 
+/// Spawn a REPL from a stream
+pub fn spawn_stream<R: Read + Send + 'static, W: Write>(reader: R, writer: W, timeout_ms: Option<u64>) -> StreamSession<W> {
+    StreamSession::new(reader, writer, timeout_ms)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -497,6 +545,15 @@ mod tests {
             Ok(())
         }()
         .unwrap_or_else(|e| panic!("test_expect_any failed: {}", e));
+
+    #[test]
+    fn test_expect_empty_command_error() {
+        let p = spawn("", Some(1000));
+        match p {
+            Ok(_) => assert!(false, "should raise an error"),
+            Err(Error(ErrorKind::EmptyProgramName, _)) => {}
+            Err(_) => assert!(false, "should raise EmptyProgramName"),
+        }
     }
 
     #[test]

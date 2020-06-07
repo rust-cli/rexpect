@@ -22,7 +22,7 @@ Add this to your `Cargo.toml`
 
 ```toml
 [dependencies]
-rexpect = "0.3"
+rexpect = "0.4"
 ```
 
 Simple example for interacting via ftp:
@@ -147,9 +147,6 @@ I'm happy to receive PRs or also Issue requests of course.
 
 The tests cover most of the aspects and it should run out of the box for
 rust stable, beta and nightly on both Linux or Mac.
-
-That said, I don't know of too many people using it yet, so use this
-with caution.  
 
 ## Design decisions
 

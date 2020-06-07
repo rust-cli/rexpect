@@ -15,7 +15,6 @@ use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 pub use nix::sys::{wait, signal};
 use crate::errors::*; // load error-chain
 
-
 /// Start a process in a forked tty so you can interact with it the same as you would
 /// within a terminal
 ///
@@ -71,7 +70,6 @@ use nix::pty::ptsname_r;
 /// based on https://blog.tarq.io/ptsname-on-osx-with-rust/
 fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
     use std::ffi::CStr;
-    use std::os::unix::io::AsRawFd;
     use nix::libc::{ioctl, TIOCPTYGNAME};
 
     // the buffer size on OSX is 128, defined by sys/ttycom.h
@@ -152,21 +150,21 @@ impl PtyProcess {
     ///
     /// This method runs waitpid on the process.
     /// This means: If you ran `exit()` before or `status()` this method will
-    /// return an Error
+    /// return `None`
     ///
     /// # Example
     /// ```rust,no_run
     ///
     /// # extern crate rexpect;
-    /// use rexpect::process;
+    /// use rexpect::process::{self, wait::WaitStatus};
     /// use std::process::Command;
     ///
     /// # fn main() {
-    ///     let cmd = Command::new("/path/to/myprog");
-    ///     let process = process::PtyProcess::new(cmd).expect("could not execute myprog");
-    ///     while process.status().unwrap() == process::wait::WaitStatus::StillAlive {
-    ///         // do something
-    ///     }
+    /// let cmd = Command::new("/path/to/myprog");
+    /// let process = process::PtyProcess::new(cmd).expect("could not execute myprog");
+    /// while let Some(WaitStatus::StillAlive) = process.status() {
+    ///     // do something
+    /// }
     /// # }
     /// ```
     ///

@@ -3,10 +3,11 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
-## [0.4.0] 2018-03-17
+## [0.4.0] 2020-05-25
 
 ### Changed
 
+- PtySession now works with any stream type, e.g. also tcp streams are supported now (thanks, thomasantony)
 - breaking: PtyBashSession was renamed and generalized into
   PtyReplSession to allow an interface for other REPLs 
 - better error messages in case of timeout to help debug when you expect
