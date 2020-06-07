@@ -73,13 +73,7 @@ impl<W: Write> StreamSession<W> {
 
     // wrapper around reader::read_until to give more context for errors
     pub fn exp<N: Needle + std::fmt::Display + ?Sized>(&mut self, needle: &N) -> Result<N::Interest> {
-        match self.reader.read_until(needle) {
-            Ok(s) => Ok(s),
-            Err(Error(ErrorKind::EOF(expected, got, _), _)) => {
-                Err(ErrorKind::EOF(expected, got, self.process.status()).into())
-            }
-            Err(e) => Err(e),
-        }
+        self.reader.read_until(needle) 
     }
 
     /// Make sure all bytes written via `send()` are sent to the process
@@ -105,11 +99,6 @@ impl<W: Write> StreamSession<W> {
     /// otherwise. This is nonblocking.
     pub fn try_read(&mut self) -> Option<char> {
         self.reader.try_read()
-    }
-
-    // wrapper around reader::read_until to give more context for errors
-    fn exp(&mut self, needle: &ReadUntil) -> Result<(String, String)> {
-        self.reader.read_until(needle)
     }
 
     /// Wait until we see EOF (i.e. child process has terminated)
@@ -238,18 +227,11 @@ pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession> {
 /// See `spawn`
 pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession> {
     let commandname = format!("{:?}", &command);
-    let mut process = PtyProcess::new(command).chain_err(|| "couldn't start process")?;
+    let mut process = PtyProcess::new(command)
+        .chain_err(|| "couldn't start process")?;
     process.set_kill_timeout(timeout_ms);
 
-    let f = process.get_file_handle();
-    let writer = LineWriter::new(f.try_clone().chain_err(|| "couldn't open write stream")?);
-    let reader = NBReader::new(f, timeout_ms);
-    Ok(PtySession {
-        process: process,
-        writer: writer,
-        reader: reader,
-        commandname: commandname,
-    })
+    PtySession::new(process, timeout_ms, commandname)
 }
 
 /// A repl session: e.g. bash or the python shell:
@@ -545,6 +527,7 @@ mod tests {
             Ok(())
         }()
         .unwrap_or_else(|e| panic!("test_expect_any failed: {}", e));
+    }
 
     #[test]
     fn test_expect_empty_command_error() {
