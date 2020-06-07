@@ -1,12 +1,12 @@
 //! Unblocking reader which supports waiting for strings/regexes and EOF to be present
 
-use std::io::{self, BufReader};
-use std::io::prelude::*;
-use std::sync::mpsc::{channel, Receiver};
-use std::{thread, result};
-use std::{time, fmt};
 use crate::errors::*; // load error-chain
 pub use regex::Regex;
+use std::io::prelude::*;
+use std::io::{self, BufReader};
+use std::sync::mpsc::{channel, Receiver};
+use std::{fmt, time};
+use std::{result, thread};
 
 #[derive(Debug)]
 enum PipeError {
@@ -330,19 +330,24 @@ impl NBReader {
             // we don't know the reason of eof yet, so we provide an empty string
             // this will be filled out in session::exp()
             if self.eof {
-                return Err(ErrorKind::EOF(needle.to_string(), self.buffer.clone(), None).into());
+                return Err(
+                    ErrorKind::EOF("ERROR NEEDLE".to_string(), self.buffer.clone(), None).into(),
+                );
             }
 
             // ran into timeout
             if let Some(timeout) = self.timeout {
                 if start.elapsed() > timeout {
-                    return Err(ErrorKind::Timeout(needle.to_string(),
-                                                  self.buffer.clone()
-                                                      .replace("\n", "`\\n`\n")
-                                                      .replace("\r", "`\\r`")
-                                                      .replace('\u{1b}', "`^`"),
-                                                  timeout)
-                                       .into());
+                    return Err(ErrorKind::Timeout(
+                        "ERROR NEEDLE".to_string(),
+                        self.buffer
+                            .clone()
+                            .replace("\n", "`\\n`\n")
+                            .replace("\r", "`\\r`")
+                            .replace('\u{1b}', "`^`"),
+                        timeout,
+                    )
+                    .into());
                 }
             }
             // nothing matched: wait a little
@@ -426,5 +431,4 @@ mod tests {
         assert_eq!(None, r.try_read());
         assert_eq!(None, r.try_read());
     }
-
 }
