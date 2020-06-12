@@ -14,10 +14,15 @@ readme      = "README.md"
 
 
 [dependencies]
-nix = "0.14"
 regex = "1"
 error-chain = "0.12"
 tempfile = "3"
+
+[target.'cfg(unix)'.dependencies]
+nix = "0.14"
+
+[target.'cfg(windows)'.dependencies]
+winptyproc = { version = "0.1", path = "D:/scratch/winptyproc" }
 
 [badges]
 travis-ci = { repository = "philippkeller/rexpect" }
