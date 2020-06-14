@@ -1,12 +1,12 @@
 //! Unblocking reader which supports waiting for strings/regexes and EOF to be present
 
-use std::io::{self, BufReader};
-use std::io::prelude::*;
-use std::sync::mpsc::{channel, Receiver};
-use std::{thread, result};
-use std::{time, fmt};
 use crate::errors::*; // load error-chain
 pub use regex::Regex;
+use std::io::prelude::*;
+use std::io::{self, BufReader};
+use std::sync::mpsc::{channel, Receiver};
+use std::{fmt, time};
+use std::{result, thread};
 
 #[derive(Debug)]
 enum PipeError {
@@ -19,77 +19,168 @@ enum PipedChar {
     EOF,
 }
 
-pub enum ReadUntil {
-    String(String),
-    Regex(Regex),
-    EOF,
-    NBytes(usize),
-    Any(Vec<ReadUntil>),
+pub struct Match<T> {
+    begin: usize,
+    end: usize,
+    interest: T,
 }
 
-impl fmt::Display for ReadUntil {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let printable = match self {
-            &ReadUntil::String(ref s) if s == "\n" => "\\n (newline)".to_string(),
-            &ReadUntil::String(ref s) if s == "\r" => "\\r (carriage return)".to_string(),
-            &ReadUntil::String(ref s) => format!("\"{}\"", s),
-            &ReadUntil::Regex(ref r) => format!("Regex: \"{}\"", r),
-            &ReadUntil::EOF => "EOF (End of File)".to_string(),
-            &ReadUntil::NBytes(n) => format!("reading {} bytes", n),
-            &ReadUntil::Any(ref v) => {
-                let mut res = Vec::new();
-                for r in v {
-                    res.push(r.to_string());
-                }
-                res.join(", ")
-            }
+impl<T> Match<T> {
+    fn new(begin: usize, end: usize, obj: T) -> Self {
+        Self {
+            begin,
+            end,
+            interest: obj,
+        }
+    }
+}
+
+pub trait Needle {
+    type Interest;
+
+    fn find(&self, buffer: &str, eof: bool) -> Option<Match<Self::Interest>>;
+}
+
+pub struct Str<S: AsRef<str>>(pub S);
+
+impl<S: AsRef<str>> Needle for Str<S> {
+    type Interest = String;
+
+    fn find(&self, buffer: &str, eof: bool) -> Option<Match<Self::Interest>> {
+        let s = self.0.as_ref();
+        buffer.find(s).and_then(|pos| {
+            Some(Match::new(
+                pos,
+                pos + s.len(),
+                buffer[..pos].to_string(),
+            ))
+        })
+    }
+}
+
+impl<S: AsRef<str>> fmt::Display for Str<S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let printable = match self.0.as_ref() {
+            "\n" => "\\n (newline)".to_string(),
+            "\r" => "\\r (carriage return)".to_string(),
+            _ => format!("\"{}\"", self),
         };
+
         write!(f, "{}", printable)
     }
 }
 
-/// find first occurrence of needle within buffer
-///
-/// # Arguments:
-///
-/// - buffer: the currently read buffer from a process which will still grow in the future
-/// - eof: if the process already sent an EOF or a HUP
-///
-/// # Return
-///
-/// Tuple with match positions:
-/// 1. position before match (0 in case of EOF and Nbytes)
-/// 2. position after match
-pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize)> {
-    match needle {
-        &ReadUntil::String(ref s) => buffer.find(s).and_then(|pos| Some((pos, pos + s.len()))),
-        &ReadUntil::Regex(ref pattern) => {
-            if let Some(mat) = pattern.find(buffer) {
-                Some((mat.start(), mat.end()))
-            } else {
-                None
-            }
-        }
-        &ReadUntil::EOF => if eof { Some((0, buffer.len())) } else { None },
-        &ReadUntil::NBytes(n) => {
-            if n <= buffer.len() {
-                Some((0, n))
-            } else if eof && buffer.len() > 0 {
-                // reached almost end of buffer, return string, even though it will be
-                // smaller than the wished n bytes
-                Some((0, buffer.len()))
-            } else {
-                None
-            }
-        }
-        &ReadUntil::Any(ref any) => {
-            for read_until in any {
-                if let Some(pos_tuple) = find(&read_until, buffer, eof) {
-                    return Some(pos_tuple);
-                }
-            }
+pub struct Regx(pub Regex);
+
+impl Needle for Regx {
+    type Interest = (String, String);
+
+    fn find(&self, buffer: &str, eof: bool) -> Option<Match<Self::Interest>> {
+        if let Some(mat) = Regex::find(&self.0, buffer) {
+            Some(Match::new(
+                0,
+                mat.end(),
+                (
+                    buffer[..mat.start()].to_string(),
+                    buffer[mat.start()..mat.end()].to_string(),
+                ),
+            ))
+        } else {
             None
         }
+    }
+}
+
+impl fmt::Display for Regx {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Regex: \"{}\"", self.0)
+    }
+}
+
+pub struct EOF;
+
+impl Needle for EOF {
+    type Interest = String;
+
+    fn find(&self, buffer: &str, eof: bool) -> Option<Match<Self::Interest>> {
+        if eof {
+            Some(Match::new(0, buffer.len(), buffer.to_string()))
+        } else {
+            None
+        }
+    }
+}
+
+impl fmt::Display for EOF {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "EOF (End of File)")
+    }
+}
+
+pub struct NBytes(pub usize);
+
+impl Needle for NBytes {
+    type Interest = String;
+
+    fn find(&self, buffer: &str, eof: bool) -> Option<Match<Self::Interest>> {
+        if self.0 <= buffer.len() {
+            Some(Match::new(0, self.0, buffer[..self.0].to_string()))
+        } else if eof && buffer.len() > 0 {
+            // reached almost end of buffer, return string, even though it will be
+            // smaller than the wished n bytes
+            Some(Match::new(0, buffer.len(), buffer[..buffer.len()].to_string()))
+        } else {
+            None
+        }
+    }
+}
+
+impl fmt::Display for NBytes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "reading {} bytes", self.0)
+    }
+}
+
+pub struct UntilOr<A, B>(A, B);
+
+pub enum OrInterest<A, B> {
+    Lhs(A),
+    Rhs(B),
+}
+
+impl<A: Needle, B: Needle> Needle for UntilOr<A, B> {
+    type Interest = OrInterest<A::Interest, B::Interest>;
+
+    fn find(&self, buffer: &str, eof: bool) -> Option<Match<Self::Interest>> {
+        self.0
+            .find(buffer, eof)
+            .and_then( |m| Some(Match::new(m.begin, m.end, OrInterest::Lhs(m.interest))))
+            .or_else(|| 
+                self.1.find(buffer, eof)
+                    .and_then(|m| Some(Match::new(m.begin, m.end, OrInterest::Rhs(m.interest))))
+            )
+    }
+}
+
+impl<A: Needle + fmt::Display, B: Needle + fmt::Display> fmt::Display for UntilOr<A, B> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "until {} or {};", self.0, self.1)
+    }
+}
+
+// unfortunately we can't implement Needle for such type
+// so there's a AsRef implementation instead of
+pub struct Until<N: Needle>(pub N);
+
+impl<N: Needle> Until<N> {
+    pub fn or<R: Needle>(self, lhs: R) -> Until<UntilOr<N, R>> {
+        Until(UntilOr(self.0, lhs))
+    }
+}
+
+impl<N:Needle> AsRef<N> for Until<N> {
+    fn as_ref(&self) -> &N {
+        &self.0
     }
 }
 
@@ -200,55 +291,63 @@ impl NBReader {
     ///
     /// ```
     /// # use std::io::Cursor;
-    /// use rexpect::reader::{NBReader, ReadUntil, Regex};
+    /// use rexpect::reader::{NBReader, Regex, EOF, NBytes, Regx, Str};
     /// // instead of a Cursor you would put your process output or file here
     /// let f = Cursor::new("Hello, miss!\n\
     ///                         What do you mean: 'miss'?");
     /// let mut e = NBReader::new(f, None);
     ///
-    /// let (first_line, _) = e.read_until(&ReadUntil::String('\n'.to_string())).unwrap();
+    /// let first_line = e.read_until(&Str("\n")).unwrap();
     /// assert_eq!("Hello, miss!", &first_line);
     ///
-    /// let (_, two_bytes) = e.read_until(&ReadUntil::NBytes(2)).unwrap();
+    /// let two_bytes = e.read_until(&NBytes(2)).unwrap();
     /// assert_eq!("Wh", &two_bytes);
     ///
     /// let re = Regex::new(r"'[a-z]+'").unwrap(); // will find 'miss'
-    /// let (before, reg_match) = e.read_until(&ReadUntil::Regex(re)).unwrap();
+    /// let (before, reg_match) = e.read_until(&Regx(re)).unwrap();
     /// assert_eq!("at do you mean: ", &before);
     /// assert_eq!("'miss'", &reg_match);
     ///
-    /// let (_, until_end) = e.read_until(&ReadUntil::EOF).unwrap();
+    /// let until_end = e.read_until(&EOF).unwrap();
     /// assert_eq!("?", &until_end);
     /// ```
     ///
-    pub fn read_until(&mut self, needle: &ReadUntil) -> Result<(String, String)> {
+    pub fn read_until<N>(&mut self, needle: &N) -> Result<N::Interest>
+    where
+        N: Needle + fmt::Display + ?Sized
+    {
         let start = time::Instant::now();
 
         loop {
             self.read_into_buffer()?;
-            if let Some(tuple_pos) = find(needle, &self.buffer, self.eof) {
-                let first = self.buffer.drain(..tuple_pos.0).collect();
-                let second = self.buffer.drain(..tuple_pos.1 - tuple_pos.0).collect();
-                return Ok((first, second));
+            if let Some(m) = needle.find(&self.buffer, self.eof) {
+                self.buffer.drain(..m.begin);
+                self.buffer.drain(..m.end - m.begin);
+                return Ok(m.interest);
             }
 
             // reached end of stream and didn't match -> error
             // we don't know the reason of eof yet, so we provide an empty string
             // this will be filled out in session::exp()
             if self.eof {
-                return Err(ErrorKind::EOF(needle.to_string(), self.buffer.clone(), None).into());
+                return Err(
+                    ErrorKind::EOF("ERROR NEEDLE".to_string(), self.buffer.clone(), None).into(),
+                );
             }
 
             // ran into timeout
             if let Some(timeout) = self.timeout {
                 if start.elapsed() > timeout {
-                    return Err(ErrorKind::Timeout(needle.to_string(),
-                                                  self.buffer.clone()
-                                                      .replace("\n", "`\\n`\n")
-                                                      .replace("\r", "`\\r`")
-                                                      .replace('\u{1b}', "`^`"),
-                                                  timeout)
-                                       .into());
+                    return Err(ErrorKind::Timeout(
+                        "ERROR NEEDLE".to_string(),
+                        self.buffer
+                            .clone()
+                            .replace("\n", "`\\n`\n")
+                            .replace("\r", "`\\r`")
+                            .replace('\u{1b}', "`^`"),
+                        timeout,
+                    )
+                    .into());
                 }
             }
             // nothing matched: wait a little
@@ -277,11 +376,9 @@ mod tests {
     fn test_expect_melon() {
         let f = io::Cursor::new("a melon\r\n");
         let mut r = NBReader::new(f, None);
-        assert_eq!(("a melon".to_string(), "\r\n".to_string()),
-                   r.read_until(&ReadUntil::String("\r\n".to_string()))
-                       .expect("cannot read line"));
+        assert_eq!("a melon".to_owned(), r.read_until(&Str("\r\n")).expect("cannot read line"));
         // check for EOF
-        match r.read_until(&ReadUntil::NBytes(10)) {
+        match r.read_until(&NBytes(10)) {
             Ok(_) => assert!(false),
             Err(Error(ErrorKind::EOF(_, _, _), _)) => {}
             Err(Error(_, _)) => assert!(false),
@@ -293,8 +390,7 @@ mod tests {
         let f = io::Cursor::new("2014-03-15");
         let mut r = NBReader::new(f, None);
         let re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
-        r.read_until(&ReadUntil::Regex(re))
-            .expect("regex doesn't match");
+        r.read_until(&Regx(re)).expect("regex doesn't match");
     }
 
     #[test]
@@ -303,41 +399,36 @@ mod tests {
         let mut r = NBReader::new(f, None);
         let re = Regex::new(r"-\d{2}-").unwrap();
         assert_eq!(("2014".to_string(), "-03-".to_string()),
-                   r.read_until(&ReadUntil::Regex(re))
-                       .expect("regex doesn't match"));
+                   r.read_until(&Regx(re)).expect("regex doesn't match"));
     }
 
     #[test]
     fn test_nbytes() {
         let f = io::Cursor::new("abcdef");
         let mut r = NBReader::new(f, None);
-        assert_eq!(("".to_string(), "ab".to_string()),
-                   r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes"));
-        assert_eq!(("".to_string(), "cde".to_string()),
-                   r.read_until(&ReadUntil::NBytes(3)).expect("3 bytes"));
-        assert_eq!(("".to_string(), "f".to_string()),
-                   r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes"));
+        assert_eq!("ab".to_string(), r.read_until(&NBytes(2)).expect("2 bytes"));
+        assert_eq!("cde".to_string(), r.read_until(&NBytes(3)).expect("3 bytes"));
+        assert_eq!("f".to_string(), r.read_until(&NBytes(4)).expect("4 bytes"));
     }
 
     #[test]
     fn test_eof() {
         let f = io::Cursor::new("lorem ipsum dolor sit amet");
         let mut r = NBReader::new(f, None);
-        r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes");
-        assert_eq!(("".to_string(), "rem ipsum dolor sit amet".to_string()),
-                   r.read_until(&ReadUntil::EOF).expect("reading until EOF"));
+        r.read_until(&NBytes(2)).expect("2 bytes");
+        assert_eq!("rem ipsum dolor sit amet".to_string(),
+                   r.read_until(&EOF).expect("reading until EOF"));
     }
 
     #[test]
     fn test_try_read() {
         let f = io::Cursor::new("lorem");
         let mut r = NBReader::new(f, None);
-        r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes");
+        r.read_until(&NBytes(4)).expect("4 bytes");
         assert_eq!(Some('m'), r.try_read());
         assert_eq!(None, r.try_read());
         assert_eq!(None, r.try_read());
         assert_eq!(None, r.try_read());
         assert_eq!(None, r.try_read());
     }
-
 }
