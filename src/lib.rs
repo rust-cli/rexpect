@@ -78,12 +78,13 @@
 //!
 //! ```
 
-pub mod process;
 pub mod session;
 pub mod reader;
 
 pub use session::{spawn, spawn_bash, spawn_python, spawn_stream};
 pub use reader::ReadUntil;
+
+pub use ptyproc::{Command, PtyProcess, PtyReader, PtyWriter};
 
 pub mod errors {
     use std::time;
