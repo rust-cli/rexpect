@@ -14,10 +14,11 @@ readme      = "README.md"
 
 
 [dependencies]
-nix = "0.14"
 regex = "1"
 error-chain = "0.12"
 tempfile = "3"
+ptyproc = { version = "0.1", git = "https://github.com/TyPR124/ptyproc" }
+
 
 [badges]
 travis-ci = { repository = "philippkeller/rexpect" }
