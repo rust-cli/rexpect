@@ -184,6 +184,19 @@ impl<N:Needle> AsRef<N> for Until<N> {
     }
 }
 
+#[macro_export]
+macro_rules! read_any {
+    ($reader: ident, $($needle:expr, $var:pat => $case:block)* _ => $eb:block) => {
+        if false {}
+        $( else if let Ok($var) = $reader.read_until(&$needle) {
+            $case
+        })*
+        else {
+            $eb
+        }
+    }
+}
+
 /// Non blocking reader
 ///
 /// Typically you'd need that to check for output of a process without blocking your thread.

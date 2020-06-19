@@ -82,7 +82,6 @@ pub mod session;
 pub mod reader;
 
 pub use session::{spawn, spawn_bash, spawn_python, spawn_stream};
-pub use reader::{Until};
 
 pub use ptyproc::{Command, PtyProcess, PtyReader, PtyWriter};
 

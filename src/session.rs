@@ -134,6 +134,18 @@ impl<W: Write> StreamSession<W> {
         self.exp(&Str(needle.to_string()))
     }
 }
+
+#[macro_export]
+macro_rules! exp_any {
+    ($session: ident, $($rest:tt)*) => {
+        // $crate::read_any!(session.reader, $($rest)*)
+        {
+            let reader = &mut $session.reader;
+            $crate::read_any!(reader, $($rest)*);
+        }
+    }
+}
+
 /// Interact with a process with read/write/signals, etc.
 #[allow(dead_code)]
 pub struct PtySession {
@@ -434,7 +446,8 @@ pub fn spawn_stream<R: Read + Send + 'static, W: Write>(reader: R, writer: W, ti
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::reader::{NBytes, Until, OrInterest};
+    use super::super::reader::{NBytes};
+    use crate::exp_any;
     
     #[cfg(unix)]
     #[test]
@@ -510,13 +523,12 @@ mod tests {
             let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
             p.send_line("Hi")?;
 
-            let until = Until(NBytes(3)).or(Str("Hi"));
+            exp_any!(p,
+                NBytes(3), res => { assert_eq!("Hi\r".to_string(), res) }
+                Str("Hi"), _ => { assert!(false) }
+                _ => { assert!(false, format!("unxpectedly, didn't find a match")) }
+            );
 
-            match p.exp(until.as_ref()) {
-                Ok(OrInterest::Lhs(s)) => assert_eq!("Hi\r".to_string(), s),
-                Ok(OrInterest::Rhs(_)) => assert!(false),
-                Err(e) => assert!(false, format!("got error: {}", e)),
-            }
             Ok(())
         }()
                 .unwrap_or_else(|e| panic!("test_expect_any failed: {}", e));
@@ -529,14 +541,13 @@ mod tests {
             let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
             p.send_line("Hello World")?;
 
-            let until = Until(Str("Hi")).or(Str("World")).or(NBytes(3));
+            exp_any!(p,
+                Str("Hi"), _ => { assert!(false) }
+                Str("World"), res => { assert_eq!("Hello ".to_string(), res) }
+                NBytes(3), _ => { assert!(false) }
+                _ => { assert!(false, format!("unxpectedly, didn't find a match")) }
+            );
 
-            match p.exp(until.as_ref()) {
-                Ok(OrInterest::Lhs(OrInterest::Lhs(_))) => assert!(false),
-                Ok(OrInterest::Lhs(OrInterest::Rhs(s))) => assert_eq!("Hello ".to_string(), s),
-                Ok(OrInterest::Rhs(_)) => assert!(false),
-                Err(e) => assert!(false, format!("got error: {}", e)),
-            }
             Ok(())
         }()
         .unwrap_or_else(|e| panic!("test_expect_any failed: {}", e));
