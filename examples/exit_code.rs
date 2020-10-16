@@ -1,7 +1,7 @@
 extern crate rexpect;
 
 use rexpect::spawn;
-use rexpect::errors::*;
+use rexpect::Result;
 use rexpect::process::wait;
 
 

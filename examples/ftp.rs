@@ -1,7 +1,7 @@
 extern crate rexpect;
 
 use rexpect::spawn;
-use rexpect::errors::*;
+use rexpect::Result;
 
 fn do_ftp() -> Result<()> {
     let mut p = spawn("ftp speedtest.tele2.net", Some(2000))?;

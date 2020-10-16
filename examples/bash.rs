@@ -1,6 +1,6 @@
 extern crate rexpect;
 use rexpect::spawn_bash;
-use rexpect::errors::*;
+use rexpect::Result;
 
 fn run() -> Result<()> {
     let mut p = spawn_bash(Some(1000))?;

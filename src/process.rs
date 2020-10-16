@@ -13,7 +13,7 @@ use nix::sys::{stat, termios};
 use nix::unistd::{fork, ForkResult, setsid, dup, dup2, Pid};
 use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
 pub use nix::sys::{wait, signal};
-use crate::errors::*; // load error-chain
+use crate::{Error, Result};
 
 /// Start a process in a forked tty so you can interact with it the same as you would
 /// within a terminal
@@ -129,7 +129,10 @@ impl PtyProcess {
                 }
             }
         }()
-                .chain_err(|| format!("could not execute {:?}", command))
+        .map_err(|source| Error::PtyError {
+            context: format!("Unable to start process {:?}", command),
+            source,
+        })
     }
 
     /// Get handle to pty fork for reading/writing
@@ -179,7 +182,10 @@ impl PtyProcess {
     /// Wait until process has exited. This is a blocking call.
     /// If the process doesn't terminate this will block forever.
     pub fn wait(&self) -> Result<wait::WaitStatus> {
-        wait::waitpid(self.child_pid, None).chain_err(|| "wait: cannot read status")
+        wait::waitpid(self.child_pid, None).map_err(|source| Error::PtyError {
+            context: "wait: cannot read status".to_owned(),
+            source,
+        })
     }
 
     /// Regularly exit the process, this method is blocking until the process is dead
@@ -189,8 +195,10 @@ impl PtyProcess {
 
     /// Nonblocking variant of `kill()` (doesn't wait for process to be killed)
     pub fn signal(&mut self, sig: signal::Signal) -> Result<()> {
-        signal::kill(self.child_pid, sig)
-            .chain_err(|| "failed to send signal to process")?;
+        signal::kill(self.child_pid, sig).map_err(|source| Error::PtyError {
+            context: "failed to send signal to process".to_owned(),
+            source,
+        })?;
         Ok(())
     }
 
@@ -211,7 +219,12 @@ impl PtyProcess {
                 Err(nix::Error::Sys(nix::errno::Errno::ESRCH)) => {
                     return Ok(wait::WaitStatus::Exited(Pid::from_raw(0), 0))
                 }
-                Err(e) => return Err(format!("kill resulted in error: {:?}", e).into()),
+                Err(source) => {
+                    return Err(Error::PtyError {
+                        context: "kill resulted in error".to_owned(),
+                        source,
+                    })
+                }
             }
 
 
@@ -222,7 +235,12 @@ impl PtyProcess {
             // kill -9 if timout is reached
             if let Some(timeout) = self.kill_timeout {
                 if start.elapsed() > timeout {
-                    signal::kill(self.child_pid, signal::Signal::SIGKILL).chain_err(|| "")?
+                    signal::kill(self.child_pid, signal::Signal::SIGKILL).map_err(|source| {
+                        Error::PtyError {
+                            context: "Failed to kill process after timeout".to_owned(),
+                            source,
+                        }
+                    })?;
                 }
             }
         }

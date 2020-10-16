@@ -8,7 +8,7 @@ use std::io::LineWriter;
 use std::process::Command;
 use std::io::prelude::*;
 use std::ops::{Deref, DerefMut};
-use crate::errors::*; // load error-chain
+use crate::{Error, Result};
 use tempfile;
 
 pub struct StreamSession<W: Write> {
@@ -32,7 +32,10 @@ impl<W: Write> StreamSession<W> {
         let mut len = self.send(line)?;
         len += self.writer
             .write(&['\n' as u8])
-            .chain_err(|| "cannot write newline")?;
+            .map_err(|source| Error::IOError {
+                context: "failed to send line".to_owned(),
+                source,
+            })?;
         Ok(len)
     }
 
@@ -44,7 +47,10 @@ impl<W: Write> StreamSession<W> {
     pub fn send(&mut self, s: &str) -> Result<usize> {
         self.writer
             .write(s.as_bytes())
-            .chain_err(|| "cannot write line to process")
+            .map_err(|source| Error::IOError {
+                context: "failed to send".to_owned(),
+                source,
+            })
     }
 
     /// Send a control code to the running process and consume resulting output line
@@ -60,22 +66,26 @@ impl<W: Write> StreamSession<W> {
             ']' => 29,
             '^' => 30,
             '_' => 31,
-            _ => return Err(format!("I don't understand Ctrl-{}", c).into()),
+            _ => return Err(Error::UnknownControlChar(c)),
         };
         self.writer
             .write_all(&[code])
-            .chain_err(|| "cannot send control")?;
+            .map_err(|source| Error::IOError {
+                context: "failed to send control code".to_owned(),
+                source,
+            })?;
+
         // stdout is line buffered, so needs a flush
-        self.writer
-            .flush()
-            .chain_err(|| "cannot flush after sending ctrl keycode")?;
+        self.flush()?;
         Ok(())
     }
 
-
     /// Make sure all bytes written via `send()` are sent to the process
     pub fn flush(&mut self) -> Result<()> {
-        self.writer.flush().chain_err(|| "could not flush")
+        self.writer.flush().map_err(|source| Error::IOError {
+            context: "cannot write newline".to_owned(),
+            source,
+        })
     }
 
     /// Read one line (blocking!) and return line without the newline
@@ -117,7 +127,13 @@ impl<W: Write> StreamSession<W> {
     /// Note that `exp_regex("^foo")` matches the start of the yet consumed output.
     /// For matching the start of the line use `exp_regex("\nfoo")`
     pub fn exp_regex(&mut self, regex: &str) -> Result<(String, String)> {
-        let res = self.exp(&ReadUntil::Regex(Regex::new(regex).chain_err(|| "invalid regex")?))
+        let res = self
+            .exp(&ReadUntil::Regex(Regex::new(regex).map_err(|source| {
+                Error::RegexError {
+                    regex: regex.to_owned(),
+                    source,
+                }
+            })?))
             .and_then(|s| Ok(s));
         res
     }
@@ -146,7 +162,7 @@ impl<W: Write> StreamSession<W> {
     ///
     /// ```
     /// use rexpect::{spawn, ReadUntil};
-    /// # use rexpect::errors::*;
+    /// # use rexpect::Result;
     ///
     /// # fn main() {
     ///     # || -> Result<()> {
@@ -192,7 +208,7 @@ impl DerefMut for PtySession {
 /// ```
 ///
 /// use rexpect::spawn;
-/// # use rexpect::errors::*;
+/// # use rexpect::Result;
 ///
 /// # fn main() {
 ///     # || -> Result<()> {
@@ -208,7 +224,10 @@ impl PtySession {
     fn new(process: PtyProcess, timeout_ms: Option<u64>, commandname: String) -> Result<Self> {
         
         let f = process.get_file_handle();
-        let reader = f.try_clone().chain_err(|| "couldn't open write stream")?;
+        let reader = f.try_clone().map_err(|source| Error::IOError {
+            context: "couldn't open write stream".to_owned(),
+            source,
+        })?;
         let stream = StreamSession::new(reader, f, timeout_ms);
         Ok(Self {
             process,
@@ -244,7 +263,7 @@ fn tokenize_command(program: &str) -> Vec<String> {
 ///   For automation 30'000 (30s, the default in pexpect) is a good value.
 pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession> {
     if program.is_empty() {
-        return Err(ErrorKind::EmptyProgramName.into());
+        return Err(Error::EmptyProgramName);
     }
 
     let mut parts = tokenize_command(program);
@@ -257,8 +276,7 @@ pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession> {
 /// See `spawn`
 pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession> {
     let commandname = format!("{:?}", &command);
-    let mut process = PtyProcess::new(command)
-        .chain_err(|| "couldn't start process")?;
+    let mut process = PtyProcess::new(command)?;
     process.set_kill_timeout(timeout_ms);
 
     PtySession::new(process, timeout_ms, commandname)
@@ -309,7 +327,7 @@ impl PtyReplSession {
     ///
     /// ```
     /// use rexpect::spawn_bash;
-    /// # use rexpect::errors::*;
+    /// # use rexpect::Result;
     ///
     /// # fn main() {
     ///     # || -> Result<()> {
@@ -417,7 +435,10 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
             echo_on: false,
         };
         pb.exp_string("~~~~")?;
-        rcfile.close().chain_err(|| "cannot delete temporary rcfile")?;
+        rcfile.close().map_err(|source| Error::IOError {
+            context: "cannot delete temporary rcfile".to_owned(),
+            source,
+        })?;
         pb.send_line(&("PS1='".to_string() + new_prompt + "'"))?;
         // wait until the new prompt appears
         pb.wait_for_prompt()?;
@@ -470,7 +491,11 @@ mod tests {
             let mut p = spawn("sleep 3", Some(1000)).expect("cannot run sleep 3");
             match p.exp_eof() {
                 Ok(_) => assert!(false, "should raise Timeout"),
-                Err(Error(ErrorKind::Timeout(_, _, _), _)) => {}
+                Err(Error::Timeout {
+                    expected: _,
+                    got: _,
+                    timeout: _,
+                }) => {}
                 Err(_) => assert!(false, "should raise TimeOut"),
 
             }
@@ -528,7 +553,7 @@ mod tests {
         let p = spawn("", Some(1000));
         match p {
             Ok(_) => assert!(false, "should raise an error"),
-            Err(Error(ErrorKind::EmptyProgramName, _)) => {}
+            Err(Error::EmptyProgramName) => {}
             Err(_) => assert!(false, "should raise EmptyProgramName"),
         }
     }

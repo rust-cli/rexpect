@@ -19,7 +19,7 @@
 //! extern crate rexpect;
 //!
 //! use rexpect::spawn;
-//! use rexpect::errors::*;
+//! use rexpect::Result;
 //!
 //! fn do_ftp() -> Result<()> {
 //!     let mut p = spawn("ftp speedtest.tele2.net", Some(2000))?;
@@ -55,7 +55,7 @@
 //! ```no_run
 //! extern crate rexpect;
 //! use rexpect::spawn_bash;
-//! use rexpect::errors::*;
+//! use rexpect::Result;
 //!
 //!
 //! fn run() -> Result<()> {
@@ -85,34 +85,61 @@ pub mod reader;
 pub use session::{spawn, spawn_bash, spawn_python, spawn_stream};
 pub use reader::ReadUntil;
 
-pub mod errors {
-    use std::time;
-    // Create the Error, ErrorKind, ResultExt, and Result types
-    error_chain::error_chain!{
-        errors {
-            EOF(expected:String, got:String, exit_code:Option<String>) {
-                description("End of filestream (usually stdout) occurred, most probably\
-                             because the process terminated")
-                display("EOF (End of File): Expected {} but got EOF after reading \"{}\", \
-                             process terminated with {:?}", expected, got,
-                             exit_code.as_ref()
-                             .unwrap_or(& "unknown".to_string()))
-            }
-            BrokenPipe {
-                description("The pipe to the process is broken. Most probably because\
-                the process died.")
-                display("PipeError")
-            }
-            Timeout(expected:String, got:String, timeout:time::Duration) {
-                description("The process didn't end within the given timeout")
-                display("Timeout Error: Expected {} but got \"{}\" (after waiting {} ms)",
-                        expected, got, (timeout.as_secs() * 1000) as u32
-                        + timeout.subsec_nanos() / 1_000_000)
-            }
-            EmptyProgramName {
-                description("The provided program name is empty.")
-                display("EmptyProgramName")
-            }
-        }
-    }
+use std::time;
+use thiserror::Error;
+
+///Simplify result type
+pub type Result<T> = std::result::Result<T, Error>;
+
+#[derive(Error, Debug)]
+pub enum Error {
+    ///The pipe to the process is broken. Most probably because
+    ///the process died.
+    #[error("PipeError")]
+    BrokenPipe,
+
+    ///The provided program name is empty.
+    #[error("EmptyProgramName")]
+    EmptyProgramName,
+
+    ///Error communicating with PytProcess
+    #[error("There was an IO error. {}", context)]
+    IOError {
+        context: String,
+        source: std::io::Error,
+    },
+
+    ///There was some other PtyProcess error.
+    #[error("There was PtyError. {}", context)]
+    PtyError { context: String, source: nix::Error },
+
+    ///Invalid regular expression
+    #[error("Invalid regular expression. {}", regex)]
+    RegexError { regex: String, source: regex::Error },
+
+    ///End of filestream (usually stdout) occurred, most probably
+    ///because the process terminated.
+    #[error("EOF (End of File): Expected {} but got EOF after reading \"{}\", \
+    process terminated with {:?}", expected, got,
+    exit_code.as_ref()
+    .unwrap_or(& "unknown".to_string()))]
+    EOF {
+        expected: String,
+        got: String,
+        exit_code: Option<String>,
+    },
+
+    ///The process didn't end within the given timeout
+    #[error("Timeout Error: Expected {} but got \"{}\" (after waiting {} ms)",
+    expected, got, (timeout.as_secs() * 1000) as u32
+    + timeout.subsec_nanos() / 1_000_000)]
+    Timeout {
+        expected: String,
+        got: String,
+        timeout: time::Duration,
+    },
+
+    ///User is attempting to use an unknown control character.
+    #[error("Unknown Control Character Ctrl-{}",.0)]
+    UnknownControlChar(char),
 }

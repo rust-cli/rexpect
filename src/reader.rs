@@ -5,7 +5,7 @@ use std::io::prelude::*;
 use std::sync::mpsc::{channel, Receiver};
 use std::{thread, result};
 use std::{time, fmt};
-use crate::errors::*; // load error-chain
+use crate::{Error, Result};
 pub use regex::Regex;
 
 #[derive(Debug)]
@@ -125,16 +125,16 @@ impl NBReader {
                 loop {
                     match reader.read(&mut byte) {
                         Ok(0) => {
-                            let _ = tx.send(Ok(PipedChar::EOF)).chain_err(|| "cannot send")?;
+                            let _ = tx.send(Ok(PipedChar::EOF)).map_err(|_| Error::BrokenPipe)?;
                             break;
                         }
                         Ok(_) => {
                             tx.send(Ok(PipedChar::Char(byte[0])))
-                                .chain_err(|| "cannot send")?;
+                                .map_err(|_| Error::BrokenPipe)?;
                         }
                         Err(error) => {
                             tx.send(Err(PipeError::IO(error)))
-                                .chain_err(|| "cannot send")?;
+                                .map_err(|_| Error::BrokenPipe)?;
                         }
                     }
                 }
@@ -236,19 +236,24 @@ impl NBReader {
             // we don't know the reason of eof yet, so we provide an empty string
             // this will be filled out in session::exp()
             if self.eof {
-                return Err(ErrorKind::EOF(needle.to_string(), self.buffer.clone(), None).into());
+                return Err(Error::EOF {
+                    expected: needle.to_string(),
+                    got: self.buffer.clone(),
+                    exit_code: None,
+                }
+                .into());
             }
 
             // ran into timeout
             if let Some(timeout) = self.timeout {
                 if start.elapsed() > timeout {
-                    return Err(ErrorKind::Timeout(needle.to_string(),
-                                                  self.buffer.clone()
-                                                      .replace("\n", "`\\n`\n")
-                                                      .replace("\r", "`\\r`")
-                                                      .replace('\u{1b}', "`^`"),
-                                                  timeout)
-                                       .into());
+                    return Err(Error::Timeout {
+                        expected: needle.to_string(),
+                        got: self.buffer.clone()
+                            .replace("\n", "`\\n`\n")
+                            .replace("\r", "`\\r`")
+                            .replace('\u{1b}', "`^`"),
+                        timeout});
                 }
             }
             // nothing matched: wait a little
@@ -283,8 +288,12 @@ mod tests {
         // check for EOF
         match r.read_until(&ReadUntil::NBytes(10)) {
             Ok(_) => assert!(false),
-            Err(Error(ErrorKind::EOF(_, _, _), _)) => {}
-            Err(Error(_, _)) => assert!(false),
+            Err(Error::EOF {
+                expected: _,
+                got: _,
+                exit_code: _,
+            }) => {}
+            Err(_) => assert!(false),
         }
     }
 
