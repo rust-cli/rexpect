@@ -91,18 +91,22 @@ use thiserror::Error;
 ///Simplify result type
 pub type Result<T> = std::result::Result<T, Error>;
 
+#[non_exhaustive]
 #[derive(Error, Debug)]
 pub enum Error {
     ///The pipe to the process is broken. Most probably because
     ///the process died.
+    #[non_exhaustive]
     #[error("PipeError")]
     BrokenPipe,
 
     ///The provided program name is empty.
+    #[non_exhaustive]
     #[error("EmptyProgramName")]
     EmptyProgramName,
 
     ///Error communicating with PytProcess
+    #[non_exhaustive]
     #[error("There was an IO error. {}", context)]
     IOError {
         context: String,
@@ -110,15 +114,18 @@ pub enum Error {
     },
 
     ///There was some other PtyProcess error.
+    #[non_exhaustive]
     #[error("There was PtyError. {}", context)]
     PtyError { context: String, source: nix::Error },
 
     ///Invalid regular expression
+    #[non_exhaustive]
     #[error("Invalid regular expression. {}", regex)]
     RegexError { regex: String, source: regex::Error },
 
-    ///End of filestream (usually stdout) occurred, most probably
+    ///End of files stream (usually stdout) occurred, most probably
     ///because the process terminated.
+    #[non_exhaustive]
     #[error("EOF (End of File): Expected {} but got EOF after reading \"{}\", \
     process terminated with {:?}", expected, got,
     exit_code.as_ref()
@@ -130,6 +137,7 @@ pub enum Error {
     },
 
     ///The process didn't end within the given timeout
+    #[non_exhaustive]
     #[error("Timeout Error: Expected {} but got \"{}\" (after waiting {} ms)",
     expected, got, (timeout.as_secs() * 1000) as u32
     + timeout.subsec_nanos() / 1_000_000)]
@@ -140,6 +148,7 @@ pub enum Error {
     },
 
     ///User is attempting to use an unknown control character.
+    #[non_exhaustive]
     #[error("Unknown Control Character Ctrl-{}",.0)]
     UnknownControlChar(char),
 }
