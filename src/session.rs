@@ -93,7 +93,7 @@ impl<W: Write> StreamSession<W> {
     }
 
     /// Return `Some(c)` if a char is ready in the stdout stream of the process, return `None`
-    /// otherwise. This is nonblocking.
+    /// otherwise. This is non-blocking.
     pub fn try_read(&mut self) -> Option<char> {
         self.reader.try_read()
     }
@@ -206,14 +206,14 @@ impl DerefMut for PtySession {
 /// ```
 impl PtySession {
     fn new(process: PtyProcess, timeout_ms: Option<u64>, commandname: String) -> Result<Self> {
-        
+
         let f = process.get_file_handle();
         let reader = f.try_clone().chain_err(|| "couldn't open write stream")?;
         let stream = StreamSession::new(reader, f, timeout_ms);
         Ok(Self {
             process,
             stream,
-            commandname: commandname,
+            commandname,
         })
     }
 }
@@ -236,9 +236,9 @@ fn tokenize_command(program: &str) -> Vec<String> {
 ///
 /// - `program`: This is split at spaces and turned into a `process::Command`
 ///   if you wish more control over this, use `spawn_command`
-/// - `timeout`: If Some: all `exp_*` commands time out after x millisecons, if None: never times
+/// - `timeout`: If Some: all `exp_*` commands time out after x milliseconds, if None: never times
 ///   out.
-///   It's higly recommended to put a timeout there, as otherwise in case of
+///   It's highly recommended to put a timeout there, as otherwise in case of
 ///   a problem the program just hangs instead of exiting with an
 ///   error message indicating where it stopped.
 ///   For automation 30'000 (30s, the default in pexpect) is a good value.
@@ -540,7 +540,7 @@ mod tests {
             p.execute("cat <(echo ready) -", "ready")?;
             Ok(())
         }().unwrap_or_else(|e| panic!("test_kill_timeout failed: {}", e));
-        // p is dropped here and kill is sent immediatly to bash
+        // p is dropped here and kill is sent immediately to bash
         // Since that is not enough to make bash exit, a kill -9 is sent within 1s (timeout)
     }
 
