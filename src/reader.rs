@@ -113,7 +113,7 @@ impl NBReader {
     /// - f: file like object
     /// - timeout:
     ///  + `None`: read_until is blocking forever. This is probably not what you want
-    ///  + `Some(millis)`: after millis millisecons a timeout error is raised
+    ///  + `Some(millis)`: after millis milliseconds a timeout error is raised
     pub fn new<R: Read + Send + 'static>(f: R, timeout: Option<u64>) -> NBReader {
         let (tx, rx) = channel();
 
@@ -257,7 +257,7 @@ impl NBReader {
     }
 
     /// Try to read one char from internal buffer. Returns None if
-    /// no char is ready, Some(char) otherwise. This is nonblocking
+    /// no char is ready, Some(char) otherwise. This is non-blocking
     pub fn try_read(&mut self) -> Option<char> {
         // discard eventual errors, EOF will be handled in read_until correctly
         let _ = self.read_into_buffer();

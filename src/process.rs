@@ -146,7 +146,7 @@ impl PtyProcess {
         self.kill_timeout = timeout_ms.and_then(|millis| Some(time::Duration::from_millis(millis)));
     }
 
-    /// Get status of child process, nonblocking.
+    /// Get status of child process, non-blocking.
     ///
     /// This method runs waitpid on the process.
     /// This means: If you ran `exit()` before or `status()` this method will
@@ -187,7 +187,7 @@ impl PtyProcess {
         self.kill(signal::SIGTERM)
     }
 
-    /// Nonblocking variant of `kill()` (doesn't wait for process to be killed)
+    /// Non-blocking variant of `kill()` (doesn't wait for process to be killed)
     pub fn signal(&mut self, sig: signal::Signal) -> Result<()> {
         signal::kill(self.child_pid, sig)
             .chain_err(|| "failed to send signal to process")?;
@@ -198,7 +198,7 @@ impl PtyProcess {
     ///
     /// repeatedly sends SIGTERM to the process until it died,
     /// the pty session is closed upon dropping PtyMaster,
-    /// so we don't need to explicitely do that here.
+    /// so we don't need to explicitly do that here.
     ///
     /// if `kill_timeout` is set and a repeated sending of signal does not result in the process
     /// being killed, then `kill -9` is sent after the `kill_timeout` duration has elapsed.
