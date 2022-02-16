@@ -113,6 +113,10 @@ pub mod errors {
                 description("The provided program name is empty.")
                 display("EmptyProgramName")
             }
+            BadProgramArguments {
+                description("The provided program arguments cannot be parsed")
+                display("BadProgramArguments")
+            }
         }
     }
 }
