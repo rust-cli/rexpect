@@ -36,4 +36,7 @@ pub enum Error {
 
     #[error(transparent)]
     Regex(#[from] regex::Error),
+
+    #[error("The provided program arguments cannot be parsed")]
+    BadProgramArguments,
 }
