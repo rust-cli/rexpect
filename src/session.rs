@@ -516,7 +516,7 @@ mod tests {
             p.send_line("Hi")?;
             match p.exp_any(vec![ReadUntil::NBytes(3), ReadUntil::String("Hi".to_string())]) {
                 Ok(s) => assert_eq!(("".to_string(), "Hi\r".to_string()), s),
-                Err(e) => assert!(false, format!("got error: {}", e)),
+                Err(e) => assert!(false, "got error: {}", e),
             }
             Ok(())
         }()
