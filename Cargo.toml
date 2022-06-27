@@ -14,7 +14,7 @@ readme      = "README.md"
 
 
 [dependencies]
-nix = "0.14"
+nix = "0.24"
 regex = "1"
 error-chain = "0.12"
 tempfile = "3"
