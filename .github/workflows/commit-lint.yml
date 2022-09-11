@@ -4,6 +4,13 @@ on:
 name: Pull Request Checks
 
 jobs:
+  block-fixup:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Block fixup commit merge
+      uses: 13rac1/block-fixup-merge-action@v2.0.0
+
   commit-lint:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
