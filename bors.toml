@@ -3,5 +3,7 @@ status = [
     "CI"
 ]
 
+cut_body_after = "---"
+
 delete_merged_branches = true
 
