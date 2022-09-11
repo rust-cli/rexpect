@@ -1,12 +1,12 @@
 //! Unblocking reader which supports waiting for strings/regexes and EOF to be present
 
-use std::io::{self, BufReader};
-use std::io::prelude::*;
-use std::sync::mpsc::{channel, Receiver};
-use std::{thread, result};
-use std::{time, fmt};
 use crate::errors::*; // load error-chain
 pub use regex::Regex;
+use std::io::prelude::*;
+use std::io::{self, BufReader};
+use std::sync::mpsc::{channel, Receiver};
+use std::{fmt, time};
+use std::{result, thread};
 
 #[derive(Debug)]
 enum PipeError {
@@ -70,7 +70,13 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
                 None
             }
         }
-        &ReadUntil::EOF => if eof { Some((0, buffer.len())) } else { None },
+        &ReadUntil::EOF => {
+            if eof {
+                Some((0, buffer.len()))
+            } else {
+                None
+            }
+        }
         &ReadUntil::NBytes(n) => {
             if n <= buffer.len() {
                 Some((0, n))
@@ -242,13 +248,16 @@ impl NBReader {
             // ran into timeout
             if let Some(timeout) = self.timeout {
                 if start.elapsed() > timeout {
-                    return Err(ErrorKind::Timeout(needle.to_string(),
-                                                  self.buffer.clone()
-                                                      .replace("\n", "`\\n`\n")
-                                                      .replace("\r", "`\\r`")
-                                                      .replace('\u{1b}', "`^`"),
-                                                  timeout)
-                                       .into());
+                    return Err(ErrorKind::Timeout(
+                        needle.to_string(),
+                        self.buffer
+                            .clone()
+                            .replace("\n", "`\\n`\n")
+                            .replace("\r", "`\\r`")
+                            .replace('\u{1b}', "`^`"),
+                        timeout,
+                    )
+                    .into());
                 }
             }
             // nothing matched: wait a little
@@ -277,9 +286,11 @@ mod tests {
     fn test_expect_melon() {
         let f = io::Cursor::new("a melon\r\n");
         let mut r = NBReader::new(f, None);
-        assert_eq!(("a melon".to_string(), "\r\n".to_string()),
-                   r.read_until(&ReadUntil::String("\r\n".to_string()))
-                       .expect("cannot read line"));
+        assert_eq!(
+            ("a melon".to_string(), "\r\n".to_string()),
+            r.read_until(&ReadUntil::String("\r\n".to_string()))
+                .expect("cannot read line")
+        );
         // check for EOF
         match r.read_until(&ReadUntil::NBytes(10)) {
             Ok(_) => assert!(false),
@@ -302,21 +313,29 @@ mod tests {
         let f = io::Cursor::new("2014-03-15");
         let mut r = NBReader::new(f, None);
         let re = Regex::new(r"-\d{2}-").unwrap();
-        assert_eq!(("2014".to_string(), "-03-".to_string()),
-                   r.read_until(&ReadUntil::Regex(re))
-                       .expect("regex doesn't match"));
+        assert_eq!(
+            ("2014".to_string(), "-03-".to_string()),
+            r.read_until(&ReadUntil::Regex(re))
+                .expect("regex doesn't match")
+        );
     }
 
     #[test]
     fn test_nbytes() {
         let f = io::Cursor::new("abcdef");
         let mut r = NBReader::new(f, None);
-        assert_eq!(("".to_string(), "ab".to_string()),
-                   r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes"));
-        assert_eq!(("".to_string(), "cde".to_string()),
-                   r.read_until(&ReadUntil::NBytes(3)).expect("3 bytes"));
-        assert_eq!(("".to_string(), "f".to_string()),
-                   r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes"));
+        assert_eq!(
+            ("".to_string(), "ab".to_string()),
+            r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes")
+        );
+        assert_eq!(
+            ("".to_string(), "cde".to_string()),
+            r.read_until(&ReadUntil::NBytes(3)).expect("3 bytes")
+        );
+        assert_eq!(
+            ("".to_string(), "f".to_string()),
+            r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes")
+        );
     }
 
     #[test]
@@ -324,8 +343,10 @@ mod tests {
         let f = io::Cursor::new("lorem ipsum dolor sit amet");
         let mut r = NBReader::new(f, None);
         r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes");
-        assert_eq!(("".to_string(), "rem ipsum dolor sit amet".to_string()),
-                   r.read_until(&ReadUntil::EOF).expect("reading until EOF"));
+        assert_eq!(
+            ("".to_string(), "rem ipsum dolor sit amet".to_string()),
+            r.read_until(&ReadUntil::EOF).expect("reading until EOF")
+        );
     }
 
     #[test]
@@ -339,5 +360,4 @@ mod tests {
         assert_eq!(None, r.try_read());
         assert_eq!(None, r.try_read());
     }
-
 }

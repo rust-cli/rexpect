@@ -1,19 +1,19 @@
 //! Start a process via pty
 
+use crate::errors::*;
+use nix;
+use nix::fcntl::{open, OFlag};
+use nix::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
+use nix::pty::{grantpt, posix_openpt, unlockpt, PtyMaster};
+pub use nix::sys::{signal, wait};
+use nix::sys::{stat, termios};
+use nix::unistd::{dup, dup2, fork, setsid, ForkResult, Pid};
 use std;
 use std::fs::File;
-use std::process::Command;
+use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::os::unix::process::CommandExt;
-use std::os::unix::io::{FromRawFd, AsRawFd};
-use std::{thread, time};
-use nix::pty::{posix_openpt, grantpt, unlockpt, PtyMaster};
-use nix::fcntl::{OFlag, open};
-use nix;
-use nix::sys::{stat, termios};
-use nix::unistd::{fork, ForkResult, setsid, dup, dup2, Pid};
-use nix::libc::{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
-pub use nix::sys::{wait, signal};
-use crate::errors::*; // load error-chain
+use std::process::Command;
+use std::{thread, time}; // load error-chain
 
 /// Start a process in a forked tty so you can interact with it the same as you would
 /// within a terminal
@@ -60,7 +60,6 @@ pub struct PtyProcess {
     kill_timeout: Option<time::Duration>,
 }
 
-
 #[cfg(target_os = "linux")]
 use nix::pty::ptsname_r;
 
@@ -69,8 +68,8 @@ use nix::pty::ptsname_r;
 /// instead of using a static mutex this calls ioctl with TIOCPTYGNAME directly
 /// based on https://blog.tarq.io/ptsname-on-osx-with-rust/
 fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
-    use std::ffi::CStr;
     use nix::libc::{ioctl, TIOCPTYGNAME};
+    use std::ffi::CStr;
 
     // the buffer size on OSX is 128, defined by sys/ttycom.h
     let mut buf: [i8; 128] = [0; 128];
@@ -103,9 +102,11 @@ impl PtyProcess {
             match fork()? {
                 ForkResult::Child => {
                     setsid()?; // create new session with child as session leader
-                    let slave_fd = open(std::path::Path::new(&slave_name),
-                                        OFlag::O_RDWR,
-                                        stat::Mode::empty())?;
+                    let slave_fd = open(
+                        std::path::Path::new(&slave_name),
+                        OFlag::O_RDWR,
+                        stat::Mode::empty(),
+                    )?;
 
                     // assign stdin, stdout, stderr to the tty, just like a terminal does
                     dup2(slave_fd, STDIN_FILENO)?;
@@ -120,16 +121,14 @@ impl PtyProcess {
                     command.exec();
                     Err(nix::Error::last())
                 }
-                ForkResult::Parent { child: child_pid } => {
-                    Ok(PtyProcess {
-                           pty: master_fd,
-                           child_pid: child_pid,
-                           kill_timeout: None,
-                       })
-                }
+                ForkResult::Parent { child: child_pid } => Ok(PtyProcess {
+                    pty: master_fd,
+                    child_pid: child_pid,
+                    kill_timeout: None,
+                }),
             }
         }()
-                .chain_err(|| format!("could not execute {:?}", command))
+        .chain_err(|| format!("could not execute {:?}", command))
     }
 
     /// Get handle to pty fork for reading/writing
@@ -189,8 +188,7 @@ impl PtyProcess {
 
     /// Non-blocking variant of `kill()` (doesn't wait for process to be killed)
     pub fn signal(&mut self, sig: signal::Signal) -> Result<()> {
-        signal::kill(self.child_pid, sig)
-            .chain_err(|| "failed to send signal to process")?;
+        signal::kill(self.child_pid, sig).chain_err(|| "failed to send signal to process")?;
         Ok(())
     }
 
@@ -213,7 +211,6 @@ impl PtyProcess {
                 }
                 Err(e) => return Err(format!("kill resulted in error: {:?}", e).into()),
             }
-
 
             match self.status() {
                 Some(status) if status != wait::WaitStatus::StillAlive => return Ok(status),
@@ -243,9 +240,9 @@ impl Drop for PtyProcess {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{BufReader, LineWriter};
-    use nix::sys::{wait, signal};
+    use nix::sys::{signal, wait};
     use std::io::prelude::*;
+    use std::io::{BufReader, LineWriter};
 
     #[test]
     /// Open cat, write string, read back string twice, send Ctrl^C and check that cat exited
@@ -271,6 +268,6 @@ mod tests {
             assert_eq!(should, wait::waitpid(process.child_pid, None).unwrap());
             Ok(())
         }()
-                .unwrap_or_else(|e| panic!("test_cat failed: {}", e));
+        .unwrap_or_else(|e| panic!("test_cat failed: {}", e));
     }
 }

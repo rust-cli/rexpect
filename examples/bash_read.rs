@@ -1,7 +1,6 @@
 extern crate rexpect;
-use rexpect::spawn_bash;
 use rexpect::errors::*;
-
+use rexpect::spawn_bash;
 
 fn run() -> Result<()> {
     let mut p = spawn_bash(Some(2000))?;
@@ -19,7 +18,10 @@ fn run() -> Result<()> {
     let (_, words) = p.exp_regex("[0-9]+")?;
     let (_, bytes) = p.exp_regex("[0-9]+")?;
     p.wait_for_prompt()?; // go sure `wc` is really done
-    println!("/etc/passwd has {} lines, {} words, {} chars", lines, words, bytes);
+    println!(
+        "/etc/passwd has {} lines, {} words, {} chars",
+        lines, words, bytes
+    );
 
     // case 3: read while program is still executing
     p.execute("ping 8.8.8.8", "bytes of data")?; // returns when it sees "bytes of data" in output
