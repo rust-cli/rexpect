@@ -20,4 +20,3 @@ error-chain = "0.12"
 tempfile = "3"
 
 [badges]
-travis-ci = { repository = "philippkeller/rexpect" }
