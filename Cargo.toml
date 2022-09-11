@@ -20,3 +20,4 @@ error-chain = "0.12"
 tempfile = "3"
 
 [badges]
+maintenance = { status = "passively-maintained" }
