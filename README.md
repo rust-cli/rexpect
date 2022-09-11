@@ -17,16 +17,6 @@ include:
 The goal is to offer a similar set of functionality as
 [pexpect](https://pexpect.readthedocs.io/en/stable/overview.html).
 
-## Maintainers wanted
-
-I have created rexpect as a project to learn rust and linux. But now due to some
-reasons I haven't used Rust in the past 2 years, so I can't keep up with the
-latest features/crate dependencies
-
-It has become hard now to judge pull requests. If you would be willing to either
-take over this repo entirely or join in as a maintainer to help evaluate PR
-please contact me.
-
 ## Examples
 
 [For more examples, check the examples directory.](https://github.com/philippkeller/rexpect/tree/master/examples)
