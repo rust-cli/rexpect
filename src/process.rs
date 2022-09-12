@@ -1,6 +1,6 @@
 //! Start a process via pty
 
-use crate::errors::*;
+use crate::error::Error;
 use nix;
 use nix::fcntl::{open, OFlag};
 use nix::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
@@ -13,7 +13,7 @@ use std::fs::File;
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::os::unix::process::CommandExt;
 use std::process::Command;
-use std::{thread, time}; // load error-chain
+use std::{thread, time};
 
 /// Start a process in a forked tty so you can interact with it the same as you would
 /// within a terminal
@@ -87,7 +87,7 @@ fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
 
 impl PtyProcess {
     /// Start a process in a forked pty
-    pub fn new(mut command: Command) -> Result<Self> {
+    pub fn new(mut command: Command) -> Result<Self, Error> {
         || -> nix::Result<Self> {
             // Open a new PTY master
             let master_fd = posix_openpt(OFlag::O_RDWR)?;
@@ -128,7 +128,7 @@ impl PtyProcess {
                 }),
             }
         }()
-        .chain_err(|| format!("could not execute {:?}", command))
+        .map_err(Error::from)
     }
 
     /// Get handle to pty fork for reading/writing
@@ -177,19 +177,18 @@ impl PtyProcess {
 
     /// Wait until process has exited. This is a blocking call.
     /// If the process doesn't terminate this will block forever.
-    pub fn wait(&self) -> Result<wait::WaitStatus> {
-        wait::waitpid(self.child_pid, None).chain_err(|| "wait: cannot read status")
+    pub fn wait(&self) -> Result<wait::WaitStatus, Error> {
+        wait::waitpid(self.child_pid, None).map_err(Error::from)
     }
 
     /// Regularly exit the process, this method is blocking until the process is dead
-    pub fn exit(&mut self) -> Result<wait::WaitStatus> {
-        self.kill(signal::SIGTERM)
+    pub fn exit(&mut self) -> Result<wait::WaitStatus, Error> {
+        self.kill(signal::SIGTERM).map_err(Error::from)
     }
 
     /// Non-blocking variant of `kill()` (doesn't wait for process to be killed)
-    pub fn signal(&mut self, sig: signal::Signal) -> Result<()> {
-        signal::kill(self.child_pid, sig).chain_err(|| "failed to send signal to process")?;
-        Ok(())
+    pub fn signal(&mut self, sig: signal::Signal) -> Result<(), Error> {
+        signal::kill(self.child_pid, sig).map_err(Error::from)
     }
 
     /// Kill the process with a specific signal. This method blocks, until the process is dead
@@ -200,7 +199,7 @@ impl PtyProcess {
     ///
     /// if `kill_timeout` is set and a repeated sending of signal does not result in the process
     /// being killed, then `kill -9` is sent after the `kill_timeout` duration has elapsed.
-    pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus> {
+    pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus, Error> {
         let start = time::Instant::now();
         loop {
             match signal::kill(self.child_pid, sig) {
@@ -209,7 +208,7 @@ impl PtyProcess {
                 Err(nix::Error::Sys(nix::errno::Errno::ESRCH)) => {
                     return Ok(wait::WaitStatus::Exited(Pid::from_raw(0), 0))
                 }
-                Err(e) => return Err(format!("kill resulted in error: {:?}", e).into()),
+                Err(e) => return Err(Error::from(e)),
             }
 
             match self.status() {
@@ -219,7 +218,7 @@ impl PtyProcess {
             // kill -9 if timout is reached
             if let Some(timeout) = self.kill_timeout {
                 if start.elapsed() > timeout {
-                    signal::kill(self.child_pid, signal::Signal::SIGKILL).chain_err(|| "")?
+                    signal::kill(self.child_pid, signal::Signal::SIGKILL).map_err(Error::from)?
                 }
             }
         }

@@ -1,8 +1,8 @@
 extern crate rexpect;
-use rexpect::errors::*;
+use rexpect::error::Error;
 use rexpect::spawn_bash;
 
-fn run() -> Result<()> {
+fn run() -> Result<(), Error> {
     let mut p = spawn_bash(Some(1000))?;
     p.execute("ping 8.8.8.8", "bytes")?;
     p.send_control('z')?;

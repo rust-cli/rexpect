@@ -2,11 +2,11 @@
 
 extern crate rexpect;
 
-use rexpect::errors::*;
+use rexpect::error::Error;
 use rexpect::session::PtyReplSession;
 use rexpect::spawn;
 
-fn ed_session() -> Result<PtyReplSession> {
+fn ed_session() -> Result<PtyReplSession, Error> {
     let mut ed = PtyReplSession {
         // for `echo_on` you need to figure that out by trial and error.
         // For bash and python repl it is false
@@ -25,7 +25,7 @@ fn ed_session() -> Result<PtyReplSession> {
     Ok(ed)
 }
 
-fn do_ed_repl() -> Result<()> {
+fn do_ed_repl() -> Result<(), Error> {
     let mut ed = ed_session()?;
     ed.send_line("a")?;
     ed.send_line("ed is the best editor evar")?;
