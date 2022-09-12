@@ -25,7 +25,7 @@ fn ed_session() -> Result<PtyReplSession, Error> {
     Ok(ed)
 }
 
-fn do_ed_repl() -> Result<(), Error> {
+fn main() -> Result<(), Error> {
     let mut ed = ed_session()?;
     ed.send_line("a")?;
     ed.send_line("ed is the best editor evar")?;
@@ -36,8 +36,4 @@ fn do_ed_repl() -> Result<(), Error> {
     ed.send_line("Q")?;
     ed.exp_eof()?;
     Ok(())
-}
-
-fn main() {
-    do_ed_repl().unwrap_or_else(|e| panic!("ed session failed with {}", e));
 }
