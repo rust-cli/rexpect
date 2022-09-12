@@ -53,8 +53,8 @@ impl<W: Write> StreamSession<W> {
     /// E.g. `send_control('c')` sends ctrl-c. Upper/smaller case does not matter.
     pub fn send_control(&mut self, c: char) -> Result<()> {
         let code = match c {
-            'a'..='z' => c as u8 + 1 - 'a' as u8,
-            'A'..='Z' => c as u8 + 1 - 'A' as u8,
+            'a'..='z' => c as u8 + 1 - b'a',
+            'A'..='Z' => c as u8 + 1 - b'A',
             '[' => 27,
             '\\' => 28,
             ']' => 29,
