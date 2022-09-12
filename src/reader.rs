@@ -126,7 +126,7 @@ impl NBReader {
                 loop {
                     match reader.read(&mut byte) {
                         Ok(0) => {
-                            let _ = tx.send(Ok(PipedChar::EOF)).chain_err(|| "cannot send")?;
+                            tx.send(Ok(PipedChar::EOF)).chain_err(|| "cannot send")?;
                             break;
                         }
                         Ok(_) => {
