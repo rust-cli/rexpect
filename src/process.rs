@@ -228,11 +228,8 @@ impl PtyProcess {
 
 impl Drop for PtyProcess {
     fn drop(&mut self) {
-        match self.status() {
-            Some(wait::WaitStatus::StillAlive) => {
-                self.exit().expect("cannot exit");
-            }
-            _ => {}
+        if let Some(wait::WaitStatus::StillAlive) = self.status() {
+            self.exit().expect("cannot exit");
         }
     }
 }
