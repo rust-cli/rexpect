@@ -83,14 +83,18 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
                 None
             }
         }
-        ReadUntil::Any(ref any) => {
-            for read_until in any {
-                if let Some(pos_tuple) = find(read_until, buffer, eof) {
-                    return Some(pos_tuple);
+        ReadUntil::Any(ref anys) => anys
+            .iter()
+            // Filter matching needles
+            .filter_map(|any| find(any, buffer, eof))
+            // Return the left-most match
+            .min_by(|(start1, end1), (start2, end2)| {
+                if start1 == start2 {
+                    end1.cmp(end2)
+                } else {
+                    start1.cmp(start2)
                 }
-            }
-            None
-        }
+            }),
     }
 }
 
@@ -304,8 +308,11 @@ mod tests {
         let f = io::Cursor::new("2014-03-15");
         let mut r = NBReader::new(f, None);
         let re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
-        r.read_until(&ReadUntil::Regex(re))
-            .expect("regex doesn't match");
+        assert_eq!(
+            ("".to_string(), "2014-03-15".to_string()),
+            r.read_until(&ReadUntil::Regex(re))
+                .expect("regex doesn't match")
+        );
     }
 
     #[test]
@@ -336,6 +343,36 @@ mod tests {
             ("".to_string(), "f".to_string()),
             r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes")
         );
+    }
+
+    #[test]
+    fn test_any_with_multiple_possible_matches() {
+        let f = io::Cursor::new("zero one two three four five");
+        let mut r = NBReader::new(f, None);
+
+        let result = r
+            .read_until(&ReadUntil::Any(vec![
+                ReadUntil::String("two".to_string()),
+                ReadUntil::String("one".to_string()),
+            ]))
+            .expect("finding string");
+
+        assert_eq!(("zero ".to_string(), "one".to_string()), result);
+    }
+
+    #[test]
+    fn test_any_with_same_start_different_length() {
+        let f = io::Cursor::new("hi hello");
+        let mut r = NBReader::new(f, None);
+
+        let result = r
+            .read_until(&ReadUntil::Any(vec![
+                ReadUntil::String("hello".to_string()),
+                ReadUntil::String("hell".to_string()),
+            ]))
+            .expect("finding string");
+
+        assert_eq!(("hi ".to_string(), "hell".to_string()), result);
     }
 
     #[test]

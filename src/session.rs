@@ -515,7 +515,7 @@ mod tests {
                 ReadUntil::NBytes(3),
                 ReadUntil::String("Hi".to_string()),
             ]) {
-                Ok(s) => assert_eq!(("".to_string(), "Hi\r".to_string()), s),
+                Ok(s) => assert_eq!(("".to_string(), "Hi".to_string()), s),
                 Err(e) => panic!("got error: {}", e),
             }
             Ok(())
