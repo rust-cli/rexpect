@@ -408,10 +408,7 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
     let mut c = Command::new("bash");
     c.args(&[
         "--rcfile",
-        rcfile
-            .path()
-            .to_str()
-            .unwrap_or_else(|| "temp file does not exist"),
+        rcfile.path().to_str().unwrap_or("temp file does not exist"),
     ]);
     spawn_command(c, timeout).and_then(|p| {
         let new_prompt = "[REXPECT_PROMPT>";
