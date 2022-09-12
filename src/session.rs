@@ -359,7 +359,7 @@ impl Drop for PtyReplSession {
     fn drop(&mut self) {
         if let Some(ref cmd) = self.quit_command {
             self.pty_session
-                .send_line(&cmd)
+                .send_line(cmd)
                 .expect("could not run `exit` on bash process");
         }
     }
