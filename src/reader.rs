@@ -14,6 +14,7 @@ enum PipeError {
 }
 
 #[derive(Debug)]
+#[allow(clippy::upper_case_acronyms)]
 enum PipedChar {
     Char(u8),
     EOF,
