@@ -274,7 +274,7 @@ impl NBReader {
     pub fn try_read(&mut self) -> Option<char> {
         // discard eventual errors, EOF will be handled in read_until correctly
         let _ = self.read_into_buffer();
-        if self.buffer.is_empty() {
+        if !self.buffer.is_empty() {
             self.buffer.drain(..1).last()
         } else {
             None
