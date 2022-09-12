@@ -2,7 +2,7 @@ extern crate rexpect;
 use rexpect::error::Error;
 use rexpect::spawn_bash;
 
-fn run() -> Result<(), Error> {
+fn main() -> Result<(), Error> {
     let mut p = spawn_bash(Some(1000))?;
     p.execute("ping 8.8.8.8", "bytes")?;
     p.send_control('z')?;
@@ -17,8 +17,4 @@ fn run() -> Result<(), Error> {
     p.send_control('c')?;
     p.exp_string("packet loss")?;
     Ok(())
-}
-
-fn main() {
-    run().unwrap_or_else(|e| panic!("bash process failed with {}", e));
 }
