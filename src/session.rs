@@ -126,7 +126,7 @@ impl<W: Write> StreamSession<W> {
     /// Return the yet unread output (without the matched string)
     pub fn exp_string(&mut self, needle: &str) -> Result<String> {
         self.exp(&ReadUntil::String(needle.to_string()))
-            .and_then(|(s, _)| Ok(s))
+            .map(|(s, _)| s)
     }
 
     /// Wait until provided char is seen on stdout of child process.
