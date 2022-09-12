@@ -4,19 +4,28 @@
 [![Released API docs](https://docs.rs/rexpect/badge.svg)](https://docs.rs/rexpect)
 [![Master API docs](https://img.shields.io/badge/docs-master-2f343b.svg)](http://philippkeller.github.io/rexpect)
 
+Spawn, control, and respond to expected patterns of child applications and
+processes, enabling the automation of interactions and testing. Components
+include:
 
-Spawn, control, and respond to expected patterns of child applications and processes, enabling the automation of interactions and testing. Components include:
-- **session**: start a new process and interact with it; primary module of rexpect.
-- **reader**: non-blocking reader, which supports waiting for strings, regex, and EOF.
+- **session**: start a new process and interact with it; primary module of
+  rexpect.
+- **reader**: non-blocking reader, which supports waiting for strings, regex,
+  and EOF.
 - **process**: spawn a process in a pty.
 
-The goal is to offer a similar set of functionality as [pexpect](https://pexpect.readthedocs.io/en/stable/overview.html).
+The goal is to offer a similar set of functionality as
+[pexpect](https://pexpect.readthedocs.io/en/stable/overview.html).
 
 ## Maintainers wanted
 
-I have created rexpect as a project to learn rust and linux. But now due to some reasons I haven't used Rust in the past 2 years, so I can't keep up with the latest features/crate dependencies
+I have created rexpect as a project to learn rust and linux. But now due to some
+reasons I haven't used Rust in the past 2 years, so I can't keep up with the
+latest features/crate dependencies
 
-It has become hard now to judge pull requests. If you would be willing to either take over this repo entirely or join in as a maintainer to help evaluate PR please contact me.
+It has become hard now to judge pull requests. If you would be willing to either
+take over this repo entirely or join in as a maintainer to help evaluate PR
+please contact me.
 
 ## Examples
 
@@ -55,7 +64,6 @@ fn do_ftp() -> Result<()> {
     Ok(())
 }
 
-
 fn main() {
     do_ftp().unwrap_or_else(|e| panic!("ftp job failed with {}", e));
 }
@@ -63,16 +71,14 @@ fn main() {
 
 ### Example with bash and reading from programs
 
-
 ```rust
 extern crate rexpect;
 use rexpect::spawn_bash;
 use rexpect::errors::*;
 
-
 fn do_bash() -> Result<()> {
     let mut p = spawn_bash(Some(2000))?;
-    
+
     // case 1: wait until program is done
     p.send_line("hostname")?;
     let hostname = p.read_line()?;
@@ -102,7 +108,6 @@ fn do_bash() -> Result<()> {
 fn main() {
     do_bash().unwrap_or_else(|e| panic!("bash job failed with {}", e));
 }
-
 ```
 
 ### Example with bash and job control
@@ -121,7 +126,6 @@ goes into nirvana. There are two functions to ensure that:
 extern crate rexpect;
 use rexpect::spawn_bash;
 use rexpect::errors::*;
-
 
 fn do_bash_jobcontrol() -> Result<()> {
     let mut p = spawn_bash(Some(1000))?;
@@ -157,7 +161,9 @@ rust stable, beta and nightly on both Linux or Mac.
 ## Design decisions
 
 - use error handling of [error-chain](https://github.com/brson/error-chain)
-- use [nix](https://github.com/nix-rust/nix) (and avoid libc wherever possible) to keep the code safe and clean
-- sadly, `expect` is used in rust too prominently to unwrap `Option`s and `Result`s, use `exp_*` instead
+- use [nix](https://github.com/nix-rust/nix) (and avoid libc wherever possible)
+  to keep the code safe and clean
+- sadly, `expect` is used in rust too prominently to unwrap `Option`s and
+  `Result`s, use `exp_*` instead
 
 Licensed under [MIT License](LICENSE)

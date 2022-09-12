@@ -15,13 +15,12 @@
 //! # Basic example
 //!
 //! ```no_run
-//!
 //! extern crate rexpect;
 //!
 //! use rexpect::spawn;
-//! use rexpect::error::*;
+//! use rexpect::error::Error;
 //!
-//! fn do_ftp() -> Result<()> {
+//! fn main() -> Result<(), Error> {
 //!     let mut p = spawn("ftp speedtest.tele2.net", Some(2000))?;
 //!     p.exp_regex("Name \\(.*\\):")?;
 //!     p.send_line("anonymous")?;
@@ -35,11 +34,6 @@
 //!     p.send_line("exit")?;
 //!     p.exp_eof()?;
 //!     Ok(())
-//! }
-//!
-//!
-//! fn main() {
-//!     do_ftp().unwrap_or_else(|e| panic!("ftp job failed with {}", e));
 //! }
 //! ```
 //!
@@ -55,10 +49,9 @@
 //! ```no_run
 //! extern crate rexpect;
 //! use rexpect::spawn_bash;
-//! use rexpect::error::*;
+//! use rexpect::error::Error;
 //!
-//!
-//! fn run() -> Result<()> {
+//! fn main() -> Result<(), Error> {
 //!     let mut p = spawn_bash(Some(30_000))?;
 //!     p.execute("ping 8.8.8.8", "bytes of data")?;
 //!     p.send_control('z')?;
@@ -71,11 +64,6 @@
 //!     p.exp_string("packet loss")?;
 //!     Ok(())
 //! }
-//!
-//! fn main() {
-//!     run().unwrap_or_else(|e| panic!("bash process failed with {}", e));
-//! }
-//!
 //! ```
 
 pub mod error;
