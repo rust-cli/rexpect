@@ -247,8 +247,8 @@ impl NBReader {
                         needle.to_string(),
                         self.buffer
                             .clone()
-                            .replace("\n", "`\\n`\n")
-                            .replace("\r", "`\\r`")
+                            .replace('\n', "`\\n`\n")
+                            .replace('\r', "`\\r`")
                             .replace('\u{1b}', "`^`"),
                         timeout,
                     )
