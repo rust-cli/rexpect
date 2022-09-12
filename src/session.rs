@@ -32,7 +32,7 @@ impl<W: Write> StreamSession<W> {
         let mut len = self.send(line)?;
         len += self
             .writer
-            .write(&['\n' as u8])
+            .write(&[b'\n'])
             .chain_err(|| "cannot write newline")?;
         Ok(len)
     }
