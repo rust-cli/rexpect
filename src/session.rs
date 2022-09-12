@@ -134,10 +134,10 @@ impl<W: Write> StreamSession<W> {
     ///
     /// ```
     /// use rexpect::{spawn, ReadUntil};
-    /// # use rexpect::errors::*;
+    /// # use rexpect::error::Error;
     ///
     /// # fn main() {
-    ///     # || -> Result<()> {
+    ///     # || -> Result<(), Error> {
     /// let mut s = spawn("cat", Some(1000))?;
     /// s.send_line("hello, polly!")?;
     /// s.exp_any(vec![ReadUntil::String("hello".into()),
@@ -178,10 +178,10 @@ impl DerefMut for PtySession {
 /// ```
 ///
 /// use rexpect::spawn;
-/// # use rexpect::errors::*;
+/// # use rexpect::error::Error;
 ///
 /// # fn main() {
-///     # || -> Result<()> {
+///     # || -> Result<(), Error> {
 /// let mut s = spawn("cat", Some(1000))?;
 /// s.send_line("hello, polly!")?;
 /// let line = s.read_line()?;
@@ -283,10 +283,10 @@ impl PtyReplSession {
     ///
     /// ```
     /// use rexpect::spawn_bash;
-    /// # use rexpect::errors::*;
+    /// # use rexpect::error::Error;
     ///
     /// # fn main() {
-    ///     # || -> Result<()> {
+    ///     # || -> Result<(), Error> {
     /// let mut p = spawn_bash(Some(1000))?;
     /// p.execute("cat <(echo ready) -", "ready")?;
     /// p.send_line("hans")?;
