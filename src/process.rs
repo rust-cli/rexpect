@@ -123,7 +123,7 @@ impl PtyProcess {
                 }
                 ForkResult::Parent { child: child_pid } => Ok(PtyProcess {
                     pty: master_fd,
-                    child_pid: child_pid,
+                    child_pid,
                     kill_timeout: None,
                 }),
             }
@@ -142,7 +142,7 @@ impl PtyProcess {
     /// the process does not react to a normal kill. If kill_timeout is set the process is
     /// `kill -9`ed after duration
     pub fn set_kill_timeout(&mut self, timeout_ms: Option<u64>) {
-        self.kill_timeout = timeout_ms.and_then(|millis| Some(time::Duration::from_millis(millis)));
+        self.kill_timeout = timeout_ms.map(time::Duration::from_millis);
     }
 
     /// Get status of child process, non-blocking.
@@ -228,11 +228,8 @@ impl PtyProcess {
 
 impl Drop for PtyProcess {
     fn drop(&mut self) {
-        match self.status() {
-            Some(wait::WaitStatus::StillAlive) => {
-                self.exit().expect("cannot exit");
-            }
-            _ => {}
+        if let Some(wait::WaitStatus::StillAlive) = self.status() {
+            self.exit().expect("cannot exit");
         }
     }
 }
@@ -253,7 +250,7 @@ mod tests {
             let f = process.get_file_handle();
             let mut writer = LineWriter::new(&f);
             let mut reader = BufReader::new(&f);
-            writer.write(b"hello cat\n")?;
+            let _ = writer.write(b"hello cat\n")?;
             let mut buf = String::new();
             reader.read_line(&mut buf)?;
             assert_eq!(buf, "hello cat\r\n");

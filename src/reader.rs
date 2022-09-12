@@ -14,6 +14,7 @@ enum PipeError {
 }
 
 #[derive(Debug)]
+#[allow(clippy::upper_case_acronyms)]
 enum PipedChar {
     Char(u8),
     EOF,
@@ -30,13 +31,13 @@ pub enum ReadUntil {
 impl fmt::Display for ReadUntil {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let printable = match self {
-            &ReadUntil::String(ref s) if s == "\n" => "\\n (newline)".to_string(),
-            &ReadUntil::String(ref s) if s == "\r" => "\\r (carriage return)".to_string(),
-            &ReadUntil::String(ref s) => format!("\"{}\"", s),
-            &ReadUntil::Regex(ref r) => format!("Regex: \"{}\"", r),
-            &ReadUntil::EOF => "EOF (End of File)".to_string(),
-            &ReadUntil::NBytes(n) => format!("reading {} bytes", n),
-            &ReadUntil::Any(ref v) => {
+            ReadUntil::String(ref s) if s == "\n" => "\\n (newline)".to_string(),
+            ReadUntil::String(ref s) if s == "\r" => "\\r (carriage return)".to_string(),
+            ReadUntil::String(ref s) => format!("\"{}\"", s),
+            ReadUntil::Regex(ref r) => format!("Regex: \"{}\"", r),
+            ReadUntil::EOF => "EOF (End of File)".to_string(),
+            ReadUntil::NBytes(n) => format!("reading {} bytes", n),
+            ReadUntil::Any(ref v) => {
                 let mut res = Vec::new();
                 for r in v {
                     res.push(r.to_string());
@@ -62,25 +63,19 @@ impl fmt::Display for ReadUntil {
 /// 2. position after match
 pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize)> {
     match needle {
-        &ReadUntil::String(ref s) => buffer.find(s).and_then(|pos| Some((pos, pos + s.len()))),
-        &ReadUntil::Regex(ref pattern) => {
-            if let Some(mat) = pattern.find(buffer) {
-                Some((mat.start(), mat.end()))
-            } else {
-                None
-            }
-        }
-        &ReadUntil::EOF => {
+        ReadUntil::String(ref s) => buffer.find(s).map(|pos| (pos, pos + s.len())),
+        ReadUntil::Regex(ref pattern) => pattern.find(buffer).map(|mat| (mat.start(), mat.end())),
+        ReadUntil::EOF => {
             if eof {
                 Some((0, buffer.len()))
             } else {
                 None
             }
         }
-        &ReadUntil::NBytes(n) => {
-            if n <= buffer.len() {
-                Some((0, n))
-            } else if eof && buffer.len() > 0 {
+        ReadUntil::NBytes(n) => {
+            if *n <= buffer.len() {
+                Some((0, *n))
+            } else if eof && buffer.is_empty() {
                 // reached almost end of buffer, return string, even though it will be
                 // smaller than the wished n bytes
                 Some((0, buffer.len()))
@@ -88,9 +83,9 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
                 None
             }
         }
-        &ReadUntil::Any(ref any) => {
+        ReadUntil::Any(ref any) => {
             for read_until in any {
-                if let Some(pos_tuple) = find(&read_until, buffer, eof) {
+                if let Some(pos_tuple) = find(read_until, buffer, eof) {
                     return Some(pos_tuple);
                 }
             }
@@ -131,7 +126,7 @@ impl NBReader {
                 loop {
                     match reader.read(&mut byte) {
                         Ok(0) => {
-                            let _ = tx.send(Ok(PipedChar::EOF)).chain_err(|| "cannot send")?;
+                            tx.send(Ok(PipedChar::EOF)).chain_err(|| "cannot send")?;
                             break;
                         }
                         Ok(_) => {
@@ -155,7 +150,7 @@ impl NBReader {
             reader: rx,
             buffer: String::with_capacity(1024),
             eof: false,
-            timeout: timeout.and_then(|millis| Some(time::Duration::from_millis(millis))),
+            timeout: timeout.map(time::Duration::from_millis),
         }
     }
 
@@ -252,8 +247,8 @@ impl NBReader {
                         needle.to_string(),
                         self.buffer
                             .clone()
-                            .replace("\n", "`\\n`\n")
-                            .replace("\r", "`\\r`")
+                            .replace('\n', "`\\n`\n")
+                            .replace('\r', "`\\r`")
                             .replace('\u{1b}', "`^`"),
                         timeout,
                     )
@@ -270,7 +265,7 @@ impl NBReader {
     pub fn try_read(&mut self) -> Option<char> {
         // discard eventual errors, EOF will be handled in read_until correctly
         let _ = self.read_into_buffer();
-        if self.buffer.len() > 0 {
+        if self.buffer.is_empty() {
             self.buffer.drain(..1).last()
         } else {
             None
@@ -293,9 +288,9 @@ mod tests {
         );
         // check for EOF
         match r.read_until(&ReadUntil::NBytes(10)) {
-            Ok(_) => assert!(false),
+            Ok(_) => panic!(),
             Err(Error(ErrorKind::EOF(_, _, _), _)) => {}
-            Err(Error(_, _)) => assert!(false),
+            Err(Error(_, _)) => panic!(),
         }
     }
 

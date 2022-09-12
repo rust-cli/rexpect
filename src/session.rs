@@ -32,7 +32,7 @@ impl<W: Write> StreamSession<W> {
         let mut len = self.send(line)?;
         len += self
             .writer
-            .write(&['\n' as u8])
+            .write(&[b'\n'])
             .chain_err(|| "cannot write newline")?;
         Ok(len)
     }
@@ -53,8 +53,8 @@ impl<W: Write> StreamSession<W> {
     /// E.g. `send_control('c')` sends ctrl-c. Upper/smaller case does not matter.
     pub fn send_control(&mut self, c: char) -> Result<()> {
         let code = match c {
-            'a'..='z' => c as u8 + 1 - 'a' as u8,
-            'A'..='Z' => c as u8 + 1 - 'A' as u8,
+            'a'..='z' => c as u8 + 1 - b'a',
+            'A'..='Z' => c as u8 + 1 - b'A',
             '[' => 27,
             '\\' => 28,
             ']' => 29,
@@ -105,7 +105,7 @@ impl<W: Write> StreamSession<W> {
     /// Wait until we see EOF (i.e. child process has terminated)
     /// Return all the yet unread output
     pub fn exp_eof(&mut self) -> Result<String> {
-        self.exp(&ReadUntil::EOF).and_then(|(_, s)| Ok(s))
+        self.exp(&ReadUntil::EOF).map(|(_, s)| s)
     }
 
     /// Wait until provided regex is seen on stdout of child process.
@@ -116,26 +116,23 @@ impl<W: Write> StreamSession<W> {
     /// Note that `exp_regex("^foo")` matches the start of the yet consumed output.
     /// For matching the start of the line use `exp_regex("\nfoo")`
     pub fn exp_regex(&mut self, regex: &str) -> Result<(String, String)> {
-        let res = self
-            .exp(&ReadUntil::Regex(
-                Regex::new(regex).chain_err(|| "invalid regex")?,
-            ))
-            .and_then(|s| Ok(s));
-        res
+        self.exp(&ReadUntil::Regex(
+            Regex::new(regex).chain_err(|| "invalid regex")?,
+        ))
     }
 
     /// Wait until provided string is seen on stdout of child process.
     /// Return the yet unread output (without the matched string)
     pub fn exp_string(&mut self, needle: &str) -> Result<String> {
         self.exp(&ReadUntil::String(needle.to_string()))
-            .and_then(|(s, _)| Ok(s))
+            .map(|(s, _)| s)
     }
 
     /// Wait until provided char is seen on stdout of child process.
     /// Return the yet unread output (without the matched char)
     pub fn exp_char(&mut self, needle: char) -> Result<String> {
         self.exp(&ReadUntil::String(needle.to_string()))
-            .and_then(|(s, _)| Ok(s))
+            .map(|(s, _)| s)
     }
 
     /// Wait until any of the provided needles is found.
@@ -362,7 +359,7 @@ impl Drop for PtyReplSession {
     fn drop(&mut self) {
         if let Some(ref cmd) = self.quit_command {
             self.pty_session
-                .send_line(&cmd)
+                .send_line(cmd)
                 .expect("could not run `exit` on bash process");
         }
     }
@@ -399,7 +396,7 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
     // would set as PS1 and we cannot know when is the right time
     // to set the new PS1
     let mut rcfile = tempfile::NamedTempFile::new().unwrap();
-    rcfile
+    let _ = rcfile
         .write(
             b"include () { [[ -f \"$1\" ]] && source \"$1\"; }\n\
                   include /etc/bash.bashrc\n\
@@ -411,10 +408,7 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
     let mut c = Command::new("bash");
     c.args(&[
         "--rcfile",
-        rcfile
-            .path()
-            .to_str()
-            .unwrap_or_else(|| return "temp file does not exist".into()),
+        rcfile.path().to_str().unwrap_or("temp file does not exist"),
     ]);
     spawn_command(c, timeout).and_then(|p| {
         let new_prompt = "[REXPECT_PROMPT>";
@@ -439,13 +433,11 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
 ///
 /// This is just a proof of concept implementation (and serves for documentation purposes)
 pub fn spawn_python(timeout: Option<u64>) -> Result<PtyReplSession> {
-    spawn_command(Command::new("python"), timeout).and_then(|p| {
-        Ok(PtyReplSession {
-            prompt: ">>> ".to_string(),
-            pty_session: p,
-            quit_command: Some("exit()".to_string()),
-            echo_on: true,
-        })
+    spawn_command(Command::new("python"), timeout).map(|p| PtyReplSession {
+        prompt: ">>> ".to_string(),
+        pty_session: p,
+        quit_command: Some("exit()".to_string()),
+        echo_on: true,
     })
 }
 
@@ -484,9 +476,9 @@ mod tests {
         || -> Result<()> {
             let mut p = spawn("sleep 3", Some(1000)).expect("cannot run sleep 3");
             match p.exp_eof() {
-                Ok(_) => assert!(false, "should raise Timeout"),
+                Ok(_) => panic!("should raise Timeout"),
                 Err(Error(ErrorKind::Timeout(_, _, _), _)) => {}
-                Err(_) => assert!(false, "should raise TimeOut"),
+                Err(_) => panic!("should raise TimeOut"),
             }
             Ok(())
         }()
@@ -533,7 +525,7 @@ mod tests {
                 ReadUntil::String("Hi".to_string()),
             ]) {
                 Ok(s) => assert_eq!(("".to_string(), "Hi\r".to_string()), s),
-                Err(e) => assert!(false, format!("got error: {}", e)),
+                Err(e) => panic!("got error: {}", e),
             }
             Ok(())
         }()
@@ -544,9 +536,9 @@ mod tests {
     fn test_expect_empty_command_error() {
         let p = spawn("", Some(1000));
         match p {
-            Ok(_) => assert!(false, "should raise an error"),
+            Ok(_) => panic!("should raise an error"),
             Err(Error(ErrorKind::EmptyProgramName, _)) => {}
-            Err(_) => assert!(false, "should raise EmptyProgramName"),
+            Err(_) => panic!("should raise EmptyProgramName"),
         }
     }
 

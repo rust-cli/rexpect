@@ -71,6 +71,21 @@ jobs:
           args: -- --check
 
 
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.60.0
+          override: true
+      - uses: swatinem/rust-cache@v1
+      - run: rustup component add clippy
+      - name: cargo-clippy
+        run: cargo clippy --all --all-targets --all-features
+
+
   # We need some "accummulation" job here because bors fails (timeouts) to
   # listen on matrix builds.
   # Hence, we have some kind of dummy here that bors can listen on
@@ -81,6 +96,7 @@ jobs:
       - check
       - deny
       - fmt
+      - clippy
     runs-on: ubuntu-latest
     steps:
       - name: CI succeeded
