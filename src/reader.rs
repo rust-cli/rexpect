@@ -31,13 +31,13 @@ pub enum ReadUntil {
 impl fmt::Display for ReadUntil {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let printable = match self {
-            &ReadUntil::String(ref s) if s == "\n" => "\\n (newline)".to_string(),
-            &ReadUntil::String(ref s) if s == "\r" => "\\r (carriage return)".to_string(),
-            &ReadUntil::String(ref s) => format!("\"{}\"", s),
-            &ReadUntil::Regex(ref r) => format!("Regex: \"{}\"", r),
-            &ReadUntil::EOF => "EOF (End of File)".to_string(),
-            &ReadUntil::NBytes(n) => format!("reading {} bytes", n),
-            &ReadUntil::Any(ref v) => {
+            ReadUntil::String(ref s) if s == "\n" => "\\n (newline)".to_string(),
+            ReadUntil::String(ref s) if s == "\r" => "\\r (carriage return)".to_string(),
+            ReadUntil::String(ref s) => format!("\"{}\"", s),
+            ReadUntil::Regex(ref r) => format!("Regex: \"{}\"", r),
+            ReadUntil::EOF => "EOF (End of File)".to_string(),
+            ReadUntil::NBytes(n) => format!("reading {} bytes", n),
+            ReadUntil::Any(ref v) => {
                 let mut res = Vec::new();
                 for r in v {
                     res.push(r.to_string());
