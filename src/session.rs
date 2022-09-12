@@ -133,7 +133,7 @@ impl<W: Write> StreamSession<W> {
     /// Return the yet unread output (without the matched char)
     pub fn exp_char(&mut self, needle: char) -> Result<String> {
         self.exp(&ReadUntil::String(needle.to_string()))
-            .and_then(|(s, _)| Ok(s))
+            .map(|(s, _)| s)
     }
 
     /// Wait until any of the provided needles is found.
