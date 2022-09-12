@@ -75,7 +75,7 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
         ReadUntil::NBytes(n) => {
             if *n <= buffer.len() {
                 Some((0, *n))
-            } else if eof && buffer.is_empty() {
+            } else if eof && !buffer.is_empty() {
                 // reached almost end of buffer, return string, even though it will be
                 // smaller than the wished n bytes
                 Some((0, buffer.len()))
