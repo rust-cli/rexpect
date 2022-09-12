@@ -150,7 +150,7 @@ impl NBReader {
             reader: rx,
             buffer: String::with_capacity(1024),
             eof: false,
-            timeout: timeout.and_then(|millis| Some(time::Duration::from_millis(millis))),
+            timeout: timeout.map(|millis| time::Duration::from_millis(millis)),
         }
     }
 
