@@ -411,7 +411,7 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
         rcfile
             .path()
             .to_str()
-            .unwrap_or_else(|| return "temp file does not exist".into()),
+            .unwrap_or_else(|| "temp file does not exist".into()),
     ]);
     spawn_command(c, timeout).and_then(|p| {
         let new_prompt = "[REXPECT_PROMPT>";
