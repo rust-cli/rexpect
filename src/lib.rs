@@ -79,16 +79,16 @@
 //! ```
 
 pub mod process;
-pub mod session;
 pub mod reader;
+pub mod session;
 
-pub use session::{spawn, spawn_bash, spawn_python, spawn_stream};
 pub use reader::ReadUntil;
+pub use session::{spawn, spawn_bash, spawn_python, spawn_stream};
 
 pub mod errors {
     use std::time;
     // Create the Error, ErrorKind, ResultExt, and Result types
-    error_chain::error_chain!{
+    error_chain::error_chain! {
         errors {
             EOF(expected:String, got:String, exit_code:Option<String>) {
                 description("End of filestream (usually stdout) occurred, most probably\

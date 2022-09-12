@@ -33,6 +33,24 @@ jobs:
         with:
           command: check
 
+
+  fmt:
+    name: format
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.60.0
+      - run: rustup component add rustfmt
+      - name: cargo-fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check
+
+
   # We need some "accummulation" job here because bors fails (timeouts) to
   # listen on matrix builds.
   # Hence, we have some kind of dummy here that bors can listen on
@@ -41,6 +59,7 @@ jobs:
     if: ${{ success() }}
     needs:
       - check
+      - fmt
     runs-on: ubuntu-latest
     steps:
       - name: CI succeeded

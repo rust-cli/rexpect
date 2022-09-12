@@ -1,7 +1,7 @@
 extern crate rexpect;
 
-use rexpect::spawn;
 use rexpect::errors::*;
+use rexpect::spawn;
 
 fn do_ftp() -> Result<()> {
     let mut p = spawn("ftp speedtest.tele2.net", Some(2000))?;
@@ -18,7 +18,6 @@ fn do_ftp() -> Result<()> {
     p.exp_eof()?;
     Ok(())
 }
-
 
 fn main() {
     do_ftp().unwrap_or_else(|e| panic!("ftp job failed with {}", e));

@@ -2,9 +2,9 @@
 
 extern crate rexpect;
 
-use rexpect::spawn;
-use rexpect::session::PtyReplSession;
 use rexpect::errors::*;
+use rexpect::session::PtyReplSession;
+use rexpect::spawn;
 
 fn ed_session() -> Result<PtyReplSession> {
     let mut ed = PtyReplSession {

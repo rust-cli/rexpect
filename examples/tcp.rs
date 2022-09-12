@@ -1,9 +1,8 @@
 use rexpect::spawn_stream;
-use std::net::TcpStream;
 use std::error::Error;
+use std::net::TcpStream;
 
-fn main() -> Result<(), Box<dyn Error>>
-{
+fn main() -> Result<(), Box<dyn Error>> {
     let tcp = TcpStream::connect("www.google.com:80")?;
     let tcp_w = tcp.try_clone()?;
     let mut session = spawn_stream(tcp, tcp_w, Some(2000));
