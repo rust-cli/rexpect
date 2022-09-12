@@ -105,7 +105,7 @@ impl<W: Write> StreamSession<W> {
     /// Wait until we see EOF (i.e. child process has terminated)
     /// Return all the yet unread output
     pub fn exp_eof(&mut self) -> Result<String> {
-        self.exp(&ReadUntil::EOF).and_then(|(_, s)| Ok(s))
+        self.exp(&ReadUntil::EOF).map(|(_, s)| s)
     }
 
     /// Wait until provided regex is seen on stdout of child process.
