@@ -1,6 +1,6 @@
 //! Unblocking reader which supports waiting for strings/regexes and EOF to be present
 
-use crate::error::*; // load error-chain
+use crate::error::Error;
 pub use regex::Regex;
 use std::io::prelude::*;
 use std::io::{self, BufReader};
@@ -120,22 +120,23 @@ impl NBReader {
 
         // spawn a thread which reads one char and sends it to tx
         thread::spawn(move || {
-            let _ = || -> Result<()> {
+            let _ = || -> Result<(), Error> {
                 let mut reader = BufReader::new(f);
                 let mut byte = [0u8];
                 loop {
                     match reader.read(&mut byte) {
                         Ok(0) => {
-                            tx.send(Ok(PipedChar::EOF)).chain_err(|| "cannot send")?;
+                            tx.send(Ok(PipedChar::EOF))
+                                .map_err(|_| Error::MpscSendError)?;
                             break;
                         }
                         Ok(_) => {
                             tx.send(Ok(PipedChar::Char(byte[0])))
-                                .chain_err(|| "cannot send")?;
+                                .map_err(|_| Error::MpscSendError)?;
                         }
                         Err(error) => {
                             tx.send(Err(PipeError::IO(error)))
-                                .chain_err(|| "cannot send")?;
+                                .map_err(|_| Error::MpscSendError)?;
                         }
                     }
                 }
@@ -155,7 +156,7 @@ impl NBReader {
     }
 
     /// reads all available chars from the read channel and stores them in self.buffer
-    fn read_into_buffer(&mut self) -> Result<()> {
+    fn read_into_buffer(&mut self) -> Result<(), Error> {
         if self.eof {
             return Ok(());
         }
@@ -222,7 +223,7 @@ impl NBReader {
     /// assert_eq!("?", &until_end);
     /// ```
     ///
-    pub fn read_until(&mut self, needle: &ReadUntil) -> Result<(String, String)> {
+    pub fn read_until(&mut self, needle: &ReadUntil) -> Result<(String, String), Error> {
         let start = time::Instant::now();
 
         loop {
@@ -237,22 +238,26 @@ impl NBReader {
             // we don't know the reason of eof yet, so we provide an empty string
             // this will be filled out in session::exp()
             if self.eof {
-                return Err(ErrorKind::EOF(needle.to_string(), self.buffer.clone(), None).into());
+                return Err(Error::EOF {
+                    expected: needle.to_string(),
+                    got: self.buffer.clone(),
+                    exit_code: None,
+                });
             }
 
             // ran into timeout
             if let Some(timeout) = self.timeout {
                 if start.elapsed() > timeout {
-                    return Err(ErrorKind::Timeout(
-                        needle.to_string(),
-                        self.buffer
+                    return Err(Error::Timeout {
+                        expected: needle.to_string(),
+                        got: self
+                            .buffer
                             .clone()
                             .replace('\n', "`\\n`\n")
                             .replace('\r', "`\\r`")
                             .replace('\u{1b}', "`^`"),
                         timeout,
-                    )
-                    .into());
+                    });
                 }
             }
             // nothing matched: wait a little
@@ -289,8 +294,8 @@ mod tests {
         // check for EOF
         match r.read_until(&ReadUntil::NBytes(10)) {
             Ok(_) => panic!(),
-            Err(Error(ErrorKind::EOF(_, _, _), _)) => {}
-            Err(Error(_, _)) => panic!(),
+            Err(Error::EOF { .. }) => {}
+            Err(_) => panic!(),
         }
     }
 

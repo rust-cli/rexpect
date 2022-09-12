@@ -1,6 +1,6 @@
 //! Main module of rexpect: start new process and interact with it
 
-use crate::error::*; // load error-chain
+use crate::error::Error; // load error-chain
 use crate::process::PtyProcess;
 pub use crate::reader::ReadUntil;
 use crate::reader::{NBReader, Regex};
@@ -28,12 +28,9 @@ impl<W: Write> StreamSession<W> {
     ///
     /// this is guaranteed to be flushed to the process
     /// returns number of written bytes
-    pub fn send_line(&mut self, line: &str) -> Result<usize> {
+    pub fn send_line(&mut self, line: &str) -> Result<usize, Error> {
         let mut len = self.send(line)?;
-        len += self
-            .writer
-            .write(&[b'\n'])
-            .chain_err(|| "cannot write newline")?;
+        len += self.writer.write(&[b'\n'])?;
         Ok(len)
     }
 
@@ -41,17 +38,15 @@ impl<W: Write> StreamSession<W> {
     /// need to call `flush()` after `send()` to make the process actually see your input.
     ///
     /// Returns number of written bytes
-    pub fn send(&mut self, s: &str) -> Result<usize> {
-        self.writer
-            .write(s.as_bytes())
-            .chain_err(|| "cannot write line to process")
+    pub fn send(&mut self, s: &str) -> Result<usize, Error> {
+        self.writer.write(s.as_bytes()).map_err(Error::from)
     }
 
     /// Send a control code to the running process and consume resulting output line
     /// (which is empty because echo is off)
     ///
     /// E.g. `send_control('c')` sends ctrl-c. Upper/smaller case does not matter.
-    pub fn send_control(&mut self, c: char) -> Result<()> {
+    pub fn send_control(&mut self, c: char) -> Result<(), Error> {
         let code = match c {
             'a'..='z' => c as u8 + 1 - b'a',
             'A'..='Z' => c as u8 + 1 - b'A',
@@ -60,26 +55,22 @@ impl<W: Write> StreamSession<W> {
             ']' => 29,
             '^' => 30,
             '_' => 31,
-            _ => return Err(format!("I don't understand Ctrl-{}", c).into()),
+            _ => return Err(Error::SendContolError(c)),
         };
-        self.writer
-            .write_all(&[code])
-            .chain_err(|| "cannot send control")?;
+        self.writer.write_all(&[code])?;
         // stdout is line buffered, so needs a flush
-        self.writer
-            .flush()
-            .chain_err(|| "cannot flush after sending ctrl keycode")?;
+        self.writer.flush()?;
         Ok(())
     }
 
     /// Make sure all bytes written via `send()` are sent to the process
-    pub fn flush(&mut self) -> Result<()> {
-        self.writer.flush().chain_err(|| "could not flush")
+    pub fn flush(&mut self) -> Result<(), Error> {
+        self.writer.flush().map_err(Error::from)
     }
 
     /// Read one line (blocking!) and return line without the newline
     /// (waits until \n is in the output fetches the line and removes \r at the end if present)
-    pub fn read_line(&mut self) -> Result<String> {
+    pub fn read_line(&mut self) -> Result<String, Error> {
         match self.exp(&ReadUntil::String('\n'.to_string())) {
             Ok((mut line, _)) => {
                 if line.ends_with('\r') {
@@ -98,13 +89,13 @@ impl<W: Write> StreamSession<W> {
     }
 
     // wrapper around reader::read_until to give more context for errors
-    fn exp(&mut self, needle: &ReadUntil) -> Result<(String, String)> {
+    fn exp(&mut self, needle: &ReadUntil) -> Result<(String, String), Error> {
         self.reader.read_until(needle)
     }
 
     /// Wait until we see EOF (i.e. child process has terminated)
     /// Return all the yet unread output
-    pub fn exp_eof(&mut self) -> Result<String> {
+    pub fn exp_eof(&mut self) -> Result<String, Error> {
         self.exp(&ReadUntil::EOF).map(|(_, s)| s)
     }
 
@@ -115,22 +106,20 @@ impl<W: Write> StreamSession<W> {
     ///
     /// Note that `exp_regex("^foo")` matches the start of the yet consumed output.
     /// For matching the start of the line use `exp_regex("\nfoo")`
-    pub fn exp_regex(&mut self, regex: &str) -> Result<(String, String)> {
-        self.exp(&ReadUntil::Regex(
-            Regex::new(regex).chain_err(|| "invalid regex")?,
-        ))
+    pub fn exp_regex(&mut self, regex: &str) -> Result<(String, String), Error> {
+        self.exp(&ReadUntil::Regex(Regex::new(regex)?))
     }
 
     /// Wait until provided string is seen on stdout of child process.
     /// Return the yet unread output (without the matched string)
-    pub fn exp_string(&mut self, needle: &str) -> Result<String> {
+    pub fn exp_string(&mut self, needle: &str) -> Result<String, Error> {
         self.exp(&ReadUntil::String(needle.to_string()))
             .map(|(s, _)| s)
     }
 
     /// Wait until provided char is seen on stdout of child process.
     /// Return the yet unread output (without the matched char)
-    pub fn exp_char(&mut self, needle: char) -> Result<String> {
+    pub fn exp_char(&mut self, needle: char) -> Result<String, Error> {
         self.exp(&ReadUntil::String(needle.to_string()))
             .map(|(s, _)| s)
     }
@@ -157,7 +146,7 @@ impl<W: Write> StreamSession<W> {
     ///     # }().expect("test failed");
     /// # }
     /// ```
-    pub fn exp_any(&mut self, needles: Vec<ReadUntil>) -> Result<(String, String)> {
+    pub fn exp_any(&mut self, needles: Vec<ReadUntil>) -> Result<(String, String), Error> {
         self.exp(&ReadUntil::Any(needles))
     }
 }
@@ -203,9 +192,13 @@ impl DerefMut for PtySession {
 /// # }
 /// ```
 impl PtySession {
-    fn new(process: PtyProcess, timeout_ms: Option<u64>, commandname: String) -> Result<Self> {
+    fn new(
+        process: PtyProcess,
+        timeout_ms: Option<u64>,
+        commandname: String,
+    ) -> Result<Self, Error> {
         let f = process.get_file_handle();
-        let reader = f.try_clone().chain_err(|| "couldn't open write stream")?;
+        let reader = f.try_clone()?;
         let stream = StreamSession::new(reader, f, timeout_ms);
         Ok(Self {
             process,
@@ -239,9 +232,9 @@ fn tokenize_command(program: &str) -> Vec<String> {
 ///   a problem the program just hangs instead of exiting with an
 ///   error message indicating where it stopped.
 ///   For automation 30'000 (30s, the default in pexpect) is a good value.
-pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession> {
+pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession, Error> {
     if program.is_empty() {
-        return Err(ErrorKind::EmptyProgramName.into());
+        return Err(Error::EmptyProgramName);
     }
 
     let mut parts = tokenize_command(program);
@@ -252,9 +245,9 @@ pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession> {
 }
 
 /// See `spawn`
-pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession> {
+pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession, Error> {
     let commandname = format!("{:?}", &command);
-    let mut process = PtyProcess::new(command).chain_err(|| "couldn't start process")?;
+    let mut process = PtyProcess::new(command)?;
     process.set_kill_timeout(timeout_ms);
 
     PtySession::new(process, timeout_ms, commandname)
@@ -284,7 +277,7 @@ pub struct PtyReplSession {
 }
 
 impl PtyReplSession {
-    pub fn wait_for_prompt(&mut self) -> Result<String> {
+    pub fn wait_for_prompt(&mut self) -> Result<String, Error> {
         self.pty_session.exp_string(&self.prompt)
     }
 
@@ -317,7 +310,7 @@ impl PtyReplSession {
     ///     # }().expect("test failed");
     /// # }
     /// ```
-    pub fn execute(&mut self, cmd: &str, ready_regex: &str) -> Result<()> {
+    pub fn execute(&mut self, cmd: &str, ready_regex: &str) -> Result<(), Error> {
         self.send_line(cmd)?;
         if self.echo_on {
             self.exp_string(cmd)?;
@@ -329,7 +322,7 @@ impl PtyReplSession {
     /// send line to repl (and flush output) and then, if echo_on=true wait for the
     /// input to appear.
     /// Return: number of bytes written
-    pub fn send_line(&mut self, line: &str) -> Result<usize> {
+    pub fn send_line(&mut self, line: &str) -> Result<usize, Error> {
         let bytes_written = self.pty_session.send_line(line)?;
         if self.echo_on {
             self.exp_string(line)?;
@@ -388,7 +381,7 @@ impl Drop for PtyReplSession {
 /// Also: if you start a program you should use `execute` and not `send_line`.
 ///
 /// For an example see the README
-pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
+pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession, Error> {
     // unfortunately working with a temporary tmpfile is the only
     // way to guarantee that we are "in step" with the prompt
     // all other attempts were futile, especially since we cannot
@@ -419,9 +412,7 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
             echo_on: false,
         };
         pb.exp_string("~~~~")?;
-        rcfile
-            .close()
-            .chain_err(|| "cannot delete temporary rcfile")?;
+        rcfile.close()?;
         pb.send_line(&("PS1='".to_string() + new_prompt + "'"))?;
         // wait until the new prompt appears
         pb.wait_for_prompt()?;
@@ -432,7 +423,7 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
 /// Spawn the python shell
 ///
 /// This is just a proof of concept implementation (and serves for documentation purposes)
-pub fn spawn_python(timeout: Option<u64>) -> Result<PtyReplSession> {
+pub fn spawn_python(timeout: Option<u64>) -> Result<PtyReplSession, Error> {
     spawn_command(Command::new("python"), timeout).map(|p| PtyReplSession {
         prompt: ">>> ".to_string(),
         pty_session: p,
@@ -456,7 +447,7 @@ mod tests {
 
     #[test]
     fn test_read_line() {
-        || -> Result<()> {
+        || -> Result<(), Error> {
             let mut s = spawn("cat", Some(1000))?;
             s.send_line("hans")?;
             assert_eq!("hans", s.read_line()?);
@@ -473,11 +464,11 @@ mod tests {
 
     #[test]
     fn test_expect_eof_timeout() {
-        || -> Result<()> {
+        || -> Result<(), Error> {
             let mut p = spawn("sleep 3", Some(1000)).expect("cannot run sleep 3");
             match p.exp_eof() {
                 Ok(_) => panic!("should raise Timeout"),
-                Err(Error(ErrorKind::Timeout(_, _, _), _)) => {}
+                Err(Error::Timeout { .. }) => {}
                 Err(_) => panic!("should raise TimeOut"),
             }
             Ok(())
@@ -493,7 +484,7 @@ mod tests {
 
     #[test]
     fn test_expect_string() {
-        || -> Result<()> {
+        || -> Result<(), Error> {
             let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
             p.send_line("hello world!")?;
             p.exp_string("hello world!")?;
@@ -506,7 +497,7 @@ mod tests {
 
     #[test]
     fn test_read_string_before() {
-        || -> Result<()> {
+        || -> Result<(), Error> {
             let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
             p.send_line("lorem ipsum dolor sit amet")?;
             assert_eq!("lorem ipsum dolor sit ", p.exp_string("amet")?);
@@ -517,7 +508,7 @@ mod tests {
 
     #[test]
     fn test_expect_any() {
-        || -> Result<()> {
+        || -> Result<(), Error> {
             let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
             p.send_line("Hi")?;
             match p.exp_any(vec![
@@ -537,14 +528,14 @@ mod tests {
         let p = spawn("", Some(1000));
         match p {
             Ok(_) => panic!("should raise an error"),
-            Err(Error(ErrorKind::EmptyProgramName, _)) => {}
+            Err(Error::EmptyProgramName) => {}
             Err(_) => panic!("should raise EmptyProgramName"),
         }
     }
 
     #[test]
     fn test_kill_timeout() {
-        || -> Result<()> {
+        || -> Result<(), Error> {
             let mut p = spawn_bash(Some(1000))?;
             p.execute("cat <(echo ready) -", "ready")?;
             Ok(())
@@ -556,7 +547,7 @@ mod tests {
 
     #[test]
     fn test_bash() {
-        || -> Result<()> {
+        || -> Result<(), Error> {
             let mut p = spawn_bash(Some(1000))?;
             p.send_line("cd /tmp/")?;
             p.wait_for_prompt()?;
@@ -569,7 +560,7 @@ mod tests {
 
     #[test]
     fn test_bash_control_chars() {
-        || -> Result<()> {
+        || -> Result<(), Error> {
             let mut p = spawn_bash(Some(1000))?;
             p.execute("cat <(echo ready) -", "ready")?;
             p.send_control('c')?; // abort: SIGINT
