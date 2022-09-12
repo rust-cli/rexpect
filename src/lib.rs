@@ -2,7 +2,7 @@
 //!
 //! # Overview
 //!
-//! Rexpect is a loose port of [pexpect](pexpect.readthedocs.io/en/stable/)
+//! Rexpect is a loose port of [pexpect](https://pexpect.readthedocs.io/en/stable/)
 //! which itself is inspired by Don Libe's expect.
 //!
 //! It's main components (depending on your need you can use either of those)
