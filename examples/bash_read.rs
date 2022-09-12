@@ -1,5 +1,5 @@
 extern crate rexpect;
-use rexpect::errors::*;
+use rexpect::error::Error;
 use rexpect::spawn_bash;
 
 fn run() -> Result<()> {

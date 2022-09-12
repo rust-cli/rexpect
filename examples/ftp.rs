@@ -1,6 +1,6 @@
 extern crate rexpect;
 
-use rexpect::errors::*;
+use rexpect::error::Error;
 use rexpect::spawn;
 
 fn do_ftp() -> Result<()> {
