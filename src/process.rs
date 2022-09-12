@@ -123,7 +123,7 @@ impl PtyProcess {
                 }
                 ForkResult::Parent { child: child_pid } => Ok(PtyProcess {
                     pty: master_fd,
-                    child_pid: child_pid,
+                    child_pid,
                     kill_timeout: None,
                 }),
             }
