@@ -396,7 +396,7 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
     // would set as PS1 and we cannot know when is the right time
     // to set the new PS1
     let mut rcfile = tempfile::NamedTempFile::new().unwrap();
-    rcfile
+    let _ = rcfile
         .write(
             b"include () { [[ -f \"$1\" ]] && source \"$1\"; }\n\
                   include /etc/bash.bashrc\n\
