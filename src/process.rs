@@ -142,7 +142,7 @@ impl PtyProcess {
     /// the process does not react to a normal kill. If kill_timeout is set the process is
     /// `kill -9`ed after duration
     pub fn set_kill_timeout(&mut self, timeout_ms: Option<u64>) {
-        self.kill_timeout = timeout_ms.and_then(|millis| Some(time::Duration::from_millis(millis)));
+        self.kill_timeout = timeout_ms.map(|millis| time::Duration::from_millis(millis));
     }
 
     /// Get status of child process, non-blocking.
