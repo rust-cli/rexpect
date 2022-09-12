@@ -107,7 +107,7 @@ pub mod errors {
                 description("The process didn't end within the given timeout")
                 display("Timeout Error: Expected {} but got \"{}\" (after waiting {} ms)",
                         expected, got, (timeout.as_secs() * 1000) as u32
-                        + timeout.subsec_nanos() / 1_000_000)
+                        + timeout.subsec_millis())
             }
             EmptyProgramName {
                 description("The provided program name is empty.")
