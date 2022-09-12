@@ -63,7 +63,7 @@ impl fmt::Display for ReadUntil {
 /// 2. position after match
 pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize)> {
     match needle {
-        ReadUntil::String(ref s) => buffer.find(s).and_then(|pos| Some((pos, pos + s.len()))),
+        ReadUntil::String(ref s) => buffer.find(s).map(|pos| (pos, pos + s.len())),
         ReadUntil::Regex(ref pattern) => {
             if let Some(mat) = pattern.find(buffer) {
                 Some((mat.start(), mat.end()))
