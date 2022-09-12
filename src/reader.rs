@@ -85,7 +85,7 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
         }
         ReadUntil::Any(ref any) => {
             for read_until in any {
-                if let Some(pos_tuple) = find(&read_until, buffer, eof) {
+                if let Some(pos_tuple) = find(read_until, buffer, eof) {
                     return Some(pos_tuple);
                 }
             }
