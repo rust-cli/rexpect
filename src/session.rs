@@ -476,9 +476,9 @@ mod tests {
         || -> Result<()> {
             let mut p = spawn("sleep 3", Some(1000)).expect("cannot run sleep 3");
             match p.exp_eof() {
-                Ok(_) => assert!(false, "should raise Timeout"),
+                Ok(_) => panic!("should raise Timeout"),
                 Err(Error(ErrorKind::Timeout(_, _, _), _)) => {}
-                Err(_) => assert!(false, "should raise TimeOut"),
+                Err(_) => panic!("should raise TimeOut"),
             }
             Ok(())
         }()
@@ -525,7 +525,7 @@ mod tests {
                 ReadUntil::String("Hi".to_string()),
             ]) {
                 Ok(s) => assert_eq!(("".to_string(), "Hi\r".to_string()), s),
-                Err(e) => assert!(false, "got error: {}", e),
+                Err(e) => panic!("got error: {}", e),
             }
             Ok(())
         }()
@@ -536,9 +536,9 @@ mod tests {
     fn test_expect_empty_command_error() {
         let p = spawn("", Some(1000));
         match p {
-            Ok(_) => assert!(false, "should raise an error"),
+            Ok(_) => panic!("should raise an error"),
             Err(Error(ErrorKind::EmptyProgramName, _)) => {}
-            Err(_) => assert!(false, "should raise EmptyProgramName"),
+            Err(_) => panic!("should raise EmptyProgramName"),
         }
     }
 

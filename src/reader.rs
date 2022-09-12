@@ -288,9 +288,9 @@ mod tests {
         );
         // check for EOF
         match r.read_until(&ReadUntil::NBytes(10)) {
-            Ok(_) => assert!(false),
+            Ok(_) => panic!(),
             Err(Error(ErrorKind::EOF(_, _, _), _)) => {}
-            Err(Error(_, _)) => assert!(false),
+            Err(Error(_, _)) => panic!(),
         }
     }
 
