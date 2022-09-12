@@ -119,7 +119,6 @@ impl<W: Write> StreamSession<W> {
         self.exp(&ReadUntil::Regex(
             Regex::new(regex).chain_err(|| "invalid regex")?,
         ))
-        .and_then(|s| Ok(s))
     }
 
     /// Wait until provided string is seen on stdout of child process.
