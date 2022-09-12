@@ -75,7 +75,7 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
         ReadUntil::NBytes(n) => {
             if *n <= buffer.len() {
                 Some((0, *n))
-            } else if eof && buffer.is_empty() {
+            } else if eof && !buffer.is_empty() {
                 // reached almost end of buffer, return string, even though it will be
                 // smaller than the wished n bytes
                 Some((0, buffer.len()))
@@ -171,11 +171,11 @@ impl NBReader {
                 // this is just from experience, e.g. "sleep 5" returns the other error which
                 // most probably means that there is no stdout stream at all -> send EOF
                 // this only happens on Linux, not on OSX
-                Err(PipeError::IO(ref err)) if err.kind() == io::ErrorKind::Other => {
-                    self.eof = true
+                Err(PipeError::IO(ref err)) => {
+                    // For an explanation of why we use `raw_os_error` see:
+                    // https://github.com/zhiburt/ptyprocess/commit/df003c8e3ff326f7d17bc723bc7c27c50495bb62
+                    self.eof = err.raw_os_error() == Some(5)
                 }
-                // discard other errors
-                Err(_) => {}
             }
         }
         Ok(())
@@ -274,7 +274,7 @@ impl NBReader {
     pub fn try_read(&mut self) -> Option<char> {
         // discard eventual errors, EOF will be handled in read_until correctly
         let _ = self.read_into_buffer();
-        if self.buffer.is_empty() {
+        if !self.buffer.is_empty() {
             self.buffer.drain(..1).last()
         } else {
             None
@@ -390,7 +390,9 @@ mod tests {
     fn test_try_read() {
         let f = io::Cursor::new("lorem");
         let mut r = NBReader::new(f, None);
-        r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes");
+        let bytes = r.read_until(&ReadUntil::NBytes(4)).unwrap();
+        assert!(bytes.0.is_empty());
+        assert_eq!(bytes.1, "lore");
         assert_eq!(Some('m'), r.try_read());
         assert_eq!(None, r.try_read());
         assert_eq!(None, r.try_read());

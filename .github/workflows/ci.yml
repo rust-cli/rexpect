@@ -34,6 +34,32 @@ jobs:
           command: check
 
 
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - 1.60.0
+          - stable
+          - beta
+          # - nightly
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          override: true
+      - uses: swatinem/rust-cache@v1
+      - name: cargo-test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all --all-features
+
+
   deny:
     name: deny
     runs-on: ubuntu-latest
@@ -97,6 +123,7 @@ jobs:
       - deny
       - fmt
       - clippy
+      - test
     runs-on: ubuntu-latest
     steps:
       - name: CI succeeded
