@@ -436,13 +436,11 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession> {
 ///
 /// This is just a proof of concept implementation (and serves for documentation purposes)
 pub fn spawn_python(timeout: Option<u64>) -> Result<PtyReplSession> {
-    spawn_command(Command::new("python"), timeout).and_then(|p| {
-        Ok(PtyReplSession {
-            prompt: ">>> ".to_string(),
-            pty_session: p,
-            quit_command: Some("exit()".to_string()),
-            echo_on: true,
-        })
+    spawn_command(Command::new("python"), timeout).map(|p| PtyReplSession {
+        prompt: ">>> ".to_string(),
+        pty_session: p,
+        quit_command: Some("exit()".to_string()),
+        echo_on: true,
     })
 }
 
