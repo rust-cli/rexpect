@@ -250,7 +250,7 @@ mod tests {
             let f = process.get_file_handle();
             let mut writer = LineWriter::new(&f);
             let mut reader = BufReader::new(&f);
-            writer.write(b"hello cat\n")?;
+            let _ = writer.write(b"hello cat\n")?;
             let mut buf = String::new();
             reader.read_line(&mut buf)?;
             assert_eq!(buf, "hello cat\r\n");
