@@ -3,7 +3,7 @@ extern crate rexpect;
 use rexpect::error::Error;
 use rexpect::spawn;
 
-fn do_ftp() -> Result<()> {
+fn do_ftp() -> Result<(), Error> {
     let mut p = spawn("ftp speedtest.tele2.net", Some(2000))?;
     p.exp_regex("Name \\(.*\\):")?;
     p.send_line("anonymous")?;

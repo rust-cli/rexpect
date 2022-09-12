@@ -2,7 +2,7 @@ extern crate rexpect;
 use rexpect::error::Error;
 use rexpect::spawn_bash;
 
-fn run() -> Result<()> {
+fn run() -> Result<(), Error> {
     let mut p = spawn_bash(Some(2000))?;
 
     // case 1: wait until program is done
