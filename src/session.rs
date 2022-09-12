@@ -155,7 +155,6 @@ impl<W: Write> StreamSession<W> {
 pub struct PtySession {
     pub process: PtyProcess,
     pub stream: StreamSession<File>,
-    pub commandname: String, // only for debugging purposes now
 }
 
 // make StreamSession's methods available directly
@@ -192,19 +191,11 @@ impl DerefMut for PtySession {
 /// # }
 /// ```
 impl PtySession {
-    fn new(
-        process: PtyProcess,
-        timeout_ms: Option<u64>,
-        commandname: String,
-    ) -> Result<Self, Error> {
+    fn new(process: PtyProcess, timeout_ms: Option<u64>) -> Result<Self, Error> {
         let f = process.get_file_handle();
         let reader = f.try_clone()?;
         let stream = StreamSession::new(reader, f, timeout_ms);
-        Ok(Self {
-            process,
-            stream,
-            commandname,
-        })
+        Ok(Self { process, stream })
     }
 }
 
@@ -241,11 +232,10 @@ pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession, Error
 
 /// See `spawn`
 pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession, Error> {
-    let commandname = format!("{:?}", &command);
     let mut process = PtyProcess::new(command)?;
     process.set_kill_timeout(timeout_ms);
 
-    PtySession::new(process, timeout_ms, commandname)
+    PtySession::new(process, timeout_ms)
 }
 
 /// A repl session: e.g. bash or the python shell:
