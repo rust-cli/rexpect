@@ -63,24 +63,24 @@ impl fmt::Display for ReadUntil {
 /// 2. position after match
 pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize)> {
     match needle {
-        &ReadUntil::String(ref s) => buffer.find(s).and_then(|pos| Some((pos, pos + s.len()))),
-        &ReadUntil::Regex(ref pattern) => {
+        ReadUntil::String(ref s) => buffer.find(s).and_then(|pos| Some((pos, pos + s.len()))),
+        ReadUntil::Regex(ref pattern) => {
             if let Some(mat) = pattern.find(buffer) {
                 Some((mat.start(), mat.end()))
             } else {
                 None
             }
         }
-        &ReadUntil::EOF => {
+        ReadUntil::EOF => {
             if eof {
                 Some((0, buffer.len()))
             } else {
                 None
             }
         }
-        &ReadUntil::NBytes(n) => {
-            if n <= buffer.len() {
-                Some((0, n))
+        ReadUntil::NBytes(n) => {
+            if *n <= buffer.len() {
+                Some((0, *n))
             } else if eof && buffer.len() > 0 {
                 // reached almost end of buffer, return string, even though it will be
                 // smaller than the wished n bytes
@@ -89,7 +89,7 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
                 None
             }
         }
-        &ReadUntil::Any(ref any) => {
+        ReadUntil::Any(ref any) => {
             for read_until in any {
                 if let Some(pos_tuple) = find(&read_until, buffer, eof) {
                     return Some(pos_tuple);
