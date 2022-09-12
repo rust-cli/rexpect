@@ -1,6 +1,6 @@
 //! Unblocking reader which supports waiting for strings/regexes and EOF to be present
 
-use crate::errors::*; // load error-chain
+use crate::error::*; // load error-chain
 pub use regex::Regex;
 use std::io::prelude::*;
 use std::io::{self, BufReader};

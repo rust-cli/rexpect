@@ -1,6 +1,6 @@
 //! Start a process via pty
 
-use crate::errors::*;
+use crate::error::*;
 use nix;
 use nix::fcntl::{open, OFlag};
 use nix::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};

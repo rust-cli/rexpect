@@ -1,6 +1,6 @@
 //! Main module of rexpect: start new process and interact with it
 
-use crate::errors::*; // load error-chain
+use crate::error::*; // load error-chain
 use crate::process::PtyProcess;
 pub use crate::reader::ReadUntil;
 use crate::reader::{NBReader, Regex};
