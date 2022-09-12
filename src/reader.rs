@@ -390,7 +390,9 @@ mod tests {
     fn test_try_read() {
         let f = io::Cursor::new("lorem");
         let mut r = NBReader::new(f, None);
-        r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes");
+        let bytes = r.read_until(&ReadUntil::NBytes(4)).unwrap();
+        assert!(bytes.0.is_empty());
+        assert_eq!(bytes.1, "lore");
         assert_eq!(Some('m'), r.try_read());
         assert_eq!(None, r.try_read());
         assert_eq!(None, r.try_read());
