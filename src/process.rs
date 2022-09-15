@@ -202,7 +202,7 @@ impl PtyProcess {
             match signal::kill(self.child_pid, sig) {
                 Ok(_) => {}
                 // process was already killed before -> ignore
-                Err(nix::Error::Sys(nix::errno::Errno::ESRCH)) => {
+                Err(nix::errno::Errno::ESRCH) => {
                     return Ok(wait::WaitStatus::Exited(Pid::from_raw(0), 0))
                 }
                 Err(e) => return Err(Error::from(e)),
