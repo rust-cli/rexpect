@@ -15,7 +15,7 @@ readme      = "README.md"
 
 [dependencies]
 comma = "1.0"
-nix = "0.14"
+nix = "0.25"
 regex = "1"
 tempfile = "3"
 thiserror = "1.0.34"
