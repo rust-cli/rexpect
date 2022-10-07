@@ -123,29 +123,27 @@ impl NBReader {
         let (tx, rx) = channel();
 
         // spawn a thread which reads one char and sends it to tx
-        thread::spawn(move || {
-            let _ = || -> Result<(), Error> {
-                let mut reader = BufReader::new(f);
-                let mut byte = [0u8];
-                loop {
-                    match reader.read(&mut byte) {
-                        Ok(0) => {
-                            tx.send(Ok(PipedChar::EOF))
-                                .map_err(|_| Error::MpscSendError)?;
-                            break;
-                        }
-                        Ok(_) => {
-                            tx.send(Ok(PipedChar::Char(byte[0])))
-                                .map_err(|_| Error::MpscSendError)?;
-                        }
-                        Err(error) => {
-                            tx.send(Err(PipeError::IO(error)))
-                                .map_err(|_| Error::MpscSendError)?;
-                        }
+        thread::spawn(move || -> Result<(), Error> {
+            let mut reader = BufReader::new(f);
+            let mut byte = [0u8];
+            loop {
+                match reader.read(&mut byte) {
+                    Ok(0) => {
+                        tx.send(Ok(PipedChar::EOF))
+                            .map_err(|_| Error::MpscSendError)?;
+                        break;
+                    }
+                    Ok(_) => {
+                        tx.send(Ok(PipedChar::Char(byte[0])))
+                            .map_err(|_| Error::MpscSendError)?;
+                    }
+                    Err(error) => {
+                        tx.send(Err(PipeError::IO(error)))
+                            .map_err(|_| Error::MpscSendError)?;
                     }
                 }
-                Ok(())
-            }();
+            }
+            Ok(())
             // don't do error handling as on an error it was most probably
             // the main thread which exited (remote hangup)
         });

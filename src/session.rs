@@ -431,34 +431,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_read_line() {
-        || -> Result<(), Error> {
-            let mut s = spawn("cat", Some(1000))?;
-            s.send_line("hans")?;
-            assert_eq!("hans", s.read_line()?);
-            let should = crate::process::wait::WaitStatus::Signaled(
-                s.process.child_pid,
-                crate::process::signal::Signal::SIGTERM,
-                false,
-            );
-            assert_eq!(should, s.process.exit()?);
-            Ok(())
-        }()
-        .unwrap_or_else(|e| panic!("test_read_line failed: {}", e));
+    fn test_read_line() -> Result<(), Error> {
+        let mut s = spawn("cat", Some(1000))?;
+        s.send_line("hans")?;
+        assert_eq!("hans", s.read_line()?);
+        let should = crate::process::wait::WaitStatus::Signaled(
+            s.process.child_pid,
+            crate::process::signal::Signal::SIGTERM,
+            false,
+        );
+        assert_eq!(should, s.process.exit()?);
+        Ok(())
     }
 
     #[test]
-    fn test_expect_eof_timeout() {
-        || -> Result<(), Error> {
-            let mut p = spawn("sleep 3", Some(1000)).expect("cannot run sleep 3");
-            match p.exp_eof() {
-                Ok(_) => panic!("should raise Timeout"),
-                Err(Error::Timeout { .. }) => {}
-                Err(_) => panic!("should raise TimeOut"),
-            }
-            Ok(())
-        }()
-        .unwrap_or_else(|e| panic!("test_timeout failed: {}", e));
+    fn test_expect_eof_timeout() -> Result<(), Error> {
+        let mut p = spawn("sleep 3", Some(1000)).expect("cannot run sleep 3");
+        match p.exp_eof() {
+            Ok(_) => panic!("should raise Timeout"),
+            Err(Error::Timeout { .. }) => {}
+            Err(_) => panic!("should raise TimeOut"),
+        }
+        Ok(())
     }
 
     #[test]
@@ -468,44 +462,35 @@ mod tests {
     }
 
     #[test]
-    fn test_expect_string() {
-        || -> Result<(), Error> {
-            let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
-            p.send_line("hello world!")?;
-            p.exp_string("hello world!")?;
-            p.send_line("hello heaven!")?;
-            p.exp_string("hello heaven!")?;
-            Ok(())
-        }()
-        .unwrap_or_else(|e| panic!("test_expect_string failed: {}", e));
+    fn test_expect_string() -> Result<(), Error> {
+        let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
+        p.send_line("hello world!")?;
+        p.exp_string("hello world!")?;
+        p.send_line("hello heaven!")?;
+        p.exp_string("hello heaven!")?;
+        Ok(())
     }
 
     #[test]
-    fn test_read_string_before() {
-        || -> Result<(), Error> {
-            let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
-            p.send_line("lorem ipsum dolor sit amet")?;
-            assert_eq!("lorem ipsum dolor sit ", p.exp_string("amet")?);
-            Ok(())
-        }()
-        .unwrap_or_else(|e| panic!("test_read_string_before failed: {}", e));
+    fn test_read_string_before() -> Result<(), Error> {
+        let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
+        p.send_line("lorem ipsum dolor sit amet")?;
+        assert_eq!("lorem ipsum dolor sit ", p.exp_string("amet")?);
+        Ok(())
     }
 
     #[test]
-    fn test_expect_any() {
-        || -> Result<(), Error> {
-            let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
-            p.send_line("Hi")?;
-            match p.exp_any(vec![
-                ReadUntil::NBytes(3),
-                ReadUntil::String("Hi".to_string()),
-            ]) {
-                Ok(s) => assert_eq!(("".to_string(), "Hi".to_string()), s),
-                Err(e) => panic!("got error: {}", e),
-            }
-            Ok(())
-        }()
-        .unwrap_or_else(|e| panic!("test_expect_any failed: {}", e));
+    fn test_expect_any() -> Result<(), Error> {
+        let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
+        p.send_line("Hi")?;
+        match p.exp_any(vec![
+            ReadUntil::NBytes(3),
+            ReadUntil::String("Hi".to_string()),
+        ]) {
+            Ok(s) => assert_eq!(("".to_string(), "Hi".to_string()), s),
+            Err(e) => panic!("got error: {}", e),
+        }
+        Ok(())
     }
 
     #[test]
@@ -519,46 +504,37 @@ mod tests {
     }
 
     #[test]
-    fn test_kill_timeout() {
-        || -> Result<(), Error> {
-            let mut p = spawn_bash(Some(1000))?;
-            p.execute("cat <(echo ready) -", "ready")?;
-            Ok(())
-        }()
-        .unwrap_or_else(|e| panic!("test_kill_timeout failed: {}", e));
+    fn test_kill_timeout() -> Result<(), Error> {
+        let mut p = spawn_bash(Some(1000))?;
+        p.execute("cat <(echo ready) -", "ready")?;
+        Ok(())
         // p is dropped here and kill is sent immediately to bash
         // Since that is not enough to make bash exit, a kill -9 is sent within 1s (timeout)
     }
 
     #[test]
-    fn test_bash() {
-        || -> Result<(), Error> {
-            let mut p = spawn_bash(Some(1000))?;
-            p.send_line("cd /tmp/")?;
-            p.wait_for_prompt()?;
-            p.send_line("pwd")?;
-            assert_eq!("/tmp\r\n", p.wait_for_prompt()?);
-            Ok(())
-        }()
-        .unwrap_or_else(|e| panic!("test_bash failed: {}", e));
+    fn test_bash() -> Result<(), Error> {
+        let mut p = spawn_bash(Some(1000))?;
+        p.send_line("cd /tmp/")?;
+        p.wait_for_prompt()?;
+        p.send_line("pwd")?;
+        assert_eq!("/tmp\r\n", p.wait_for_prompt()?);
+        Ok(())
     }
 
     #[test]
-    fn test_bash_control_chars() {
-        || -> Result<(), Error> {
-            let mut p = spawn_bash(Some(1000))?;
-            p.execute("cat <(echo ready) -", "ready")?;
-            p.send_control('c')?; // abort: SIGINT
-            p.wait_for_prompt()?;
-            p.execute("cat <(echo ready) -", "ready")?;
-            p.send_control('z')?; // suspend:SIGTSTPcon
-            p.exp_regex(r"(Stopped|suspended)\s+cat .*")?;
-            p.send_line("fg")?;
-            p.execute("cat <(echo ready) -", "ready")?;
-            p.send_control('c')?;
-            Ok(())
-        }()
-        .unwrap_or_else(|e| panic!("test_bash_control_chars failed: {}", e));
+    fn test_bash_control_chars() -> Result<(), Error> {
+        let mut p = spawn_bash(Some(1000))?;
+        p.execute("cat <(echo ready) -", "ready")?;
+        p.send_control('c')?; // abort: SIGINT
+        p.wait_for_prompt()?;
+        p.execute("cat <(echo ready) -", "ready")?;
+        p.send_control('z')?; // suspend:SIGTSTPcon
+        p.exp_regex(r"(Stopped|suspended)\s+cat .*")?;
+        p.send_line("fg")?;
+        p.execute("cat <(echo ready) -", "ready")?;
+        p.send_control('c')?;
+        Ok(())
     }
 
     #[test]
