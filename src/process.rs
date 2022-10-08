@@ -88,47 +88,44 @@ fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
 impl PtyProcess {
     /// Start a process in a forked pty
     pub fn new(mut command: Command) -> Result<Self, Error> {
-        || -> nix::Result<Self> {
-            // Open a new PTY master
-            let master_fd = posix_openpt(OFlag::O_RDWR)?;
+        // Open a new PTY master
+        let master_fd = posix_openpt(OFlag::O_RDWR)?;
 
-            // Allow a slave to be generated for it
-            grantpt(&master_fd)?;
-            unlockpt(&master_fd)?;
+        // Allow a slave to be generated for it
+        grantpt(&master_fd)?;
+        unlockpt(&master_fd)?;
 
-            // on Linux this is the libc function, on OSX this is our implementation of ptsname_r
-            let slave_name = ptsname_r(&master_fd)?;
+        // on Linux this is the libc function, on OSX this is our implementation of ptsname_r
+        let slave_name = ptsname_r(&master_fd)?;
 
-            match fork()? {
-                ForkResult::Child => {
-                    setsid()?; // create new session with child as session leader
-                    let slave_fd = open(
-                        std::path::Path::new(&slave_name),
-                        OFlag::O_RDWR,
-                        stat::Mode::empty(),
-                    )?;
+        match fork()? {
+            ForkResult::Child => {
+                setsid()?; // create new session with child as session leader
+                let slave_fd = open(
+                    std::path::Path::new(&slave_name),
+                    OFlag::O_RDWR,
+                    stat::Mode::empty(),
+                )?;
 
-                    // assign stdin, stdout, stderr to the tty, just like a terminal does
-                    dup2(slave_fd, STDIN_FILENO)?;
-                    dup2(slave_fd, STDOUT_FILENO)?;
-                    dup2(slave_fd, STDERR_FILENO)?;
+                // assign stdin, stdout, stderr to the tty, just like a terminal does
+                dup2(slave_fd, STDIN_FILENO)?;
+                dup2(slave_fd, STDOUT_FILENO)?;
+                dup2(slave_fd, STDERR_FILENO)?;
 
-                    // set echo off
-                    let mut flags = termios::tcgetattr(STDIN_FILENO)?;
-                    flags.local_flags &= !termios::LocalFlags::ECHO;
-                    termios::tcsetattr(STDIN_FILENO, termios::SetArg::TCSANOW, &flags)?;
+                // set echo off
+                let mut flags = termios::tcgetattr(STDIN_FILENO)?;
+                flags.local_flags &= !termios::LocalFlags::ECHO;
+                termios::tcsetattr(STDIN_FILENO, termios::SetArg::TCSANOW, &flags)?;
 
-                    command.exec();
-                    Err(nix::Error::last())
-                }
-                ForkResult::Parent { child: child_pid } => Ok(PtyProcess {
-                    pty: master_fd,
-                    child_pid,
-                    kill_timeout: None,
-                }),
+                command.exec();
+                Err(Error::Nix(nix::Error::last()))
             }
-        }()
-        .map_err(Error::from)
+            ForkResult::Parent { child: child_pid } => Ok(PtyProcess {
+                pty: master_fd,
+                child_pid,
+                kill_timeout: None,
+            }),
+        }
     }
 
     /// Get handle to pty fork for reading/writing
@@ -242,28 +239,23 @@ mod tests {
 
     #[test]
     /// Open cat, write string, read back string twice, send Ctrl^C and check that cat exited
-    fn test_cat() {
-        // wrapping into closure so I can use ?
-        || -> std::io::Result<()> {
-            let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
-            let f = process.get_file_handle();
-            let mut writer = LineWriter::new(&f);
-            let mut reader = BufReader::new(&f);
-            let _ = writer.write(b"hello cat\n")?;
-            let mut buf = String::new();
-            reader.read_line(&mut buf)?;
-            assert_eq!(buf, "hello cat\r\n");
+    fn test_cat() -> std::io::Result<()> {
+        let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
+        let f = process.get_file_handle();
+        let mut writer = LineWriter::new(&f);
+        let mut reader = BufReader::new(&f);
+        let _ = writer.write(b"hello cat\n")?;
+        let mut buf = String::new();
+        reader.read_line(&mut buf)?;
+        assert_eq!(buf, "hello cat\r\n");
 
-            // this sleep solves an edge case of some cases when cat is somehow not "ready"
-            // to take the ^C (occasional test hangs)
-            thread::sleep(time::Duration::from_millis(100));
-            writer.write_all(&[3])?; // send ^C
-            writer.flush()?;
-            let should =
-                wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
-            assert_eq!(should, wait::waitpid(process.child_pid, None).unwrap());
-            Ok(())
-        }()
-        .unwrap_or_else(|e| panic!("test_cat failed: {}", e));
+        // this sleep solves an edge case of some cases when cat is somehow not "ready"
+        // to take the ^C (occasional test hangs)
+        thread::sleep(time::Duration::from_millis(100));
+        writer.write_all(&[3])?; // send ^C
+        writer.flush()?;
+        let should = wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
+        assert_eq!(should, wait::waitpid(process.child_pid, None).unwrap());
+        Ok(())
     }
 }
