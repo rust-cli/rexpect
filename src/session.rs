@@ -432,7 +432,7 @@ mod tests {
 
     #[test]
     fn test_read_line() -> Result<(), Error> {
-        let mut s = spawn("cat", Some(1000))?;
+        let mut s = spawn("cat", Some(100000))?;
         s.send_line("hans")?;
         assert_eq!("hans", s.read_line()?);
         let should = crate::process::wait::WaitStatus::Signaled(
