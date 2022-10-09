@@ -3,7 +3,7 @@ status = [
     "CI"
 ]
 
-cut_body_after = "---"
+cut_body_after = "<details>"
 
 delete_merged_branches = true
 
