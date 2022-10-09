@@ -98,7 +98,7 @@ impl PtyProcess {
         // on Linux this is the libc function, on OSX this is our implementation of ptsname_r
         let slave_name = ptsname_r(&master_fd)?;
 
-        match fork()? {
+        match unsafe { fork()? } {
             ForkResult::Child => {
                 setsid()?; // create new session with child as session leader
                 let slave_fd = open(
@@ -202,7 +202,7 @@ impl PtyProcess {
             match signal::kill(self.child_pid, sig) {
                 Ok(_) => {}
                 // process was already killed before -> ignore
-                Err(nix::Error::Sys(nix::errno::Errno::ESRCH)) => {
+                Err(nix::errno::Errno::ESRCH) => {
                     return Ok(wait::WaitStatus::Exited(Pid::from_raw(0), 0))
                 }
                 Err(e) => return Err(Error::from(e)),
