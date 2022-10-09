@@ -98,7 +98,7 @@ impl PtyProcess {
         // on Linux this is the libc function, on OSX this is our implementation of ptsname_r
         let slave_name = ptsname_r(&master_fd)?;
 
-        match fork()? {
+        match unsafe { fork()? } {
             ForkResult::Child => {
                 setsid()?; // create new session with child as session leader
                 let slave_fd = open(
