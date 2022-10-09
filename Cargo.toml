@@ -10,8 +10,7 @@ license     = "MIT"
 categories  = ["os::unix-apis"]
 keywords    = ["pty", "automation", "testing", "expect", "pexpect"]
 readme      = "README.md"
-
-
+rust-version = "1.60"
 
 [dependencies]
 comma = "1.0"
