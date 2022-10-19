@@ -1,6 +1,6 @@
 extern crate rexpect;
 
-use rexpect::error::Error;
+use rexpect::errors::Error;
 use rexpect::spawn;
 
 fn main() -> Result<(), Error> {

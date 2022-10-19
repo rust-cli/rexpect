@@ -1,3 +1,4 @@
+extern crate rexpect;
 use rexpect::spawn_stream;
 use std::error::Error;
 use std::net::TcpStream;

@@ -2,7 +2,7 @@
 
 extern crate rexpect;
 
-use rexpect::error::Error;
+use rexpect::errors::Error;
 use rexpect::session::PtyReplSession;
 use rexpect::spawn;
 
