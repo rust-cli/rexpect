@@ -28,7 +28,7 @@ Add this to your `Cargo.toml`
 
 ```toml
 [dependencies]
-rexpect = "0.4"
+rexpect = "0.5"
 ```
 
 Simple example for interacting via ftp:
