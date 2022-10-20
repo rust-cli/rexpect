@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.5.0] 2022-10-09
+
+### Changed
+
+- Replace error-chain with thiserror
+- Make any_exp return results deterministically
+- Fix argument tokenization
+- Update to nix 0.25
+
+### Fixed
+
+- Fix https link to pexpect docs
+- Many clippy fixes
+- Remove unnecesary closures
+- Fix EOF detection on nightly
+- Fix examples
+
 ## [0.4.0] 2020-05-25
 
 ### Changed
