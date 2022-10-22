@@ -15,7 +15,6 @@
 //! # Basic example
 //!
 //! ```no_run
-//! extern crate rexpect;
 //!
 //! use rexpect::spawn;
 //! use rexpect::error::Error;
@@ -47,7 +46,6 @@
 //! printed "above" the last `execute()`.
 //!
 //! ```no_run
-//! extern crate rexpect;
 //! use rexpect::spawn_bash;
 //! use rexpect::error::Error;
 //!

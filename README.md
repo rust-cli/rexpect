@@ -28,16 +28,14 @@ Add this to your `Cargo.toml`
 
 ```toml
 [dependencies]
-rexpect = "0.4"
+rexpect = "0.5"
 ```
 
 Simple example for interacting via ftp:
 
 ```rust
-extern crate rexpect;
-
 use rexpect::spawn;
-use rexpect::errors::*;
+use rexpect::error::*;
 
 fn do_ftp() -> Result<()> {
     let mut p = spawn("ftp speedtest.tele2.net", Some(30_000))?;
@@ -63,9 +61,8 @@ fn main() {
 ### Example with bash and reading from programs
 
 ```rust
-extern crate rexpect;
 use rexpect::spawn_bash;
-use rexpect::errors::*;
+use rexpect::error::*;
 
 fn do_bash() -> Result<()> {
     let mut p = spawn_bash(Some(2000))?;
@@ -114,9 +111,8 @@ goes into nirvana. There are two functions to ensure that:
 
 
 ```rust
-extern crate rexpect;
 use rexpect::spawn_bash;
-use rexpect::errors::*;
+use rexpect::error::*;
 
 fn do_bash_jobcontrol() -> Result<()> {
     let mut p = spawn_bash(Some(1000))?;
@@ -151,7 +147,6 @@ rust stable, beta and nightly on both Linux or Mac.
 
 ## Design decisions
 
-- use error handling of [error-chain](https://github.com/brson/error-chain)
 - use [nix](https://github.com/nix-rust/nix) (and avoid libc wherever possible)
   to keep the code safe and clean
 - sadly, `expect` is used in rust too prominently to unwrap `Option`s and
