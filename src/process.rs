@@ -29,9 +29,6 @@ use std::{thread, time};
 /// # #![allow(unused_mut)]
 /// # #![allow(unused_variables)]
 ///
-/// extern crate nix;
-/// extern crate rexpect;
-///
 /// use rexpect::process::PtyProcess;
 /// use std::process::Command;
 /// use std::fs::File;
@@ -151,7 +148,6 @@ impl PtyProcess {
     /// # Example
     /// ```rust,no_run
     ///
-    /// # extern crate rexpect;
     /// use rexpect::process::{self, wait::WaitStatus};
     /// use std::process::Command;
     ///

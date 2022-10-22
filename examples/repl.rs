@@ -1,7 +1,5 @@
 //! An example how you would test your own repl
 
-extern crate rexpect;
-
 use rexpect::error::Error;
 use rexpect::session::PtyReplSession;
 use rexpect::spawn;

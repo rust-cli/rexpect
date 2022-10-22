@@ -1,4 +1,3 @@
-extern crate rexpect;
 use rexpect::error::Error;
 use rexpect::spawn_bash;
 
