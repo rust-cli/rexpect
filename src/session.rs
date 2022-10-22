@@ -192,7 +192,7 @@ impl DerefMut for PtySession {
 /// ```
 impl PtySession {
     fn new(process: PtyProcess, timeout_ms: Option<u64>) -> Result<Self, Error> {
-        let f = process.get_file_handle();
+        let f = process.get_file_handle()?;
         let reader = f.try_clone()?;
         let stream = StreamSession::new(reader, f, timeout_ms);
         Ok(Self { process, stream })
@@ -373,16 +373,14 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession, Error> {
     // wait for the first prompt since we don't know what .bashrc
     // would set as PS1 and we cannot know when is the right time
     // to set the new PS1
-    let mut rcfile = tempfile::NamedTempFile::new().unwrap();
-    let _ = rcfile
-        .write(
-            b"include () { [[ -f \"$1\" ]] && source \"$1\"; }\n\
+    let mut rcfile = tempfile::NamedTempFile::new()?;
+    let _ = rcfile.write(
+        b"include () { [[ -f \"$1\" ]] && source \"$1\"; }\n\
                   include /etc/bash.bashrc\n\
                   include ~/.bashrc\n\
                   PS1=\"~~~~\"\n\
                   unset PROMPT_COMMAND\n",
-        )
-        .expect("cannot write to tmpfile");
+    )?;
     let mut c = Command::new("bash");
     c.args(&[
         "--rcfile",
