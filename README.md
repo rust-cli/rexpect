@@ -33,7 +33,7 @@ rexpect = "0.5"
 
 Simple example for interacting via ftp:
 
-```rust
+```rust,no_run
 use rexpect::spawn;
 use rexpect::error::*;
 
@@ -60,7 +60,7 @@ fn main() {
 
 ### Example with bash and reading from programs
 
-```rust
+```rust,no_run
 use rexpect::spawn_bash;
 use rexpect::error::*;
 
@@ -110,7 +110,7 @@ goes into nirvana. There are two functions to ensure that:
 
 
 
-```rust
+```rust,no_run
 use rexpect::spawn_bash;
 use rexpect::error::*;
 
