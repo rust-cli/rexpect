@@ -126,10 +126,10 @@ impl PtyProcess {
     }
 
     /// Get handle to pty fork for reading/writing
-    pub fn get_file_handle(&self) -> File {
+    pub fn get_file_handle(&self) -> Result<File, Error> {
         // needed because otherwise fd is closed both by dropping process and reader/writer
-        let fd = dup(self.pty.as_raw_fd()).unwrap();
-        unsafe { File::from_raw_fd(fd) }
+        let fd = dup(self.pty.as_raw_fd())?;
+        unsafe { Ok(File::from_raw_fd(fd)) }
     }
 
     /// At the drop of PtyProcess the running process is killed. This is blocking forever if
@@ -230,14 +230,13 @@ impl Drop for PtyProcess {
 mod tests {
     use super::*;
     use nix::sys::{signal, wait};
-    use std::io::prelude::*;
-    use std::io::{BufReader, LineWriter};
+    use std::io::{BufRead, BufReader, LineWriter, Write};
 
     #[test]
     /// Open cat, write string, read back string twice, send Ctrl^C and check that cat exited
     fn test_cat() -> std::io::Result<()> {
         let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
-        let f = process.get_file_handle();
+        let f = process.get_file_handle().unwrap();
         let mut writer = LineWriter::new(&f);
         let mut reader = BufReader::new(&f);
         let _ = writer.write(b"hello cat\n")?;
