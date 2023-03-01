@@ -19,5 +19,11 @@ regex = "1"
 tempfile = "3"
 thiserror = "1.0.34"
 
+which = { version = "4.4", optional = true }
+
 [badges]
 maintenance = { status = "passively-maintained" }
+
+[features]
+default = []
+which = ["dep:which"]
