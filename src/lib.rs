@@ -71,3 +71,7 @@ pub mod session;
 
 pub use reader::ReadUntil;
 pub use session::{spawn, spawn_bash, spawn_python, spawn_stream};
+
+// include the README.md here to test its doc
+#[doc = include_str!("../README.md")]
+mod test {}

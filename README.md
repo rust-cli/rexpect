@@ -33,11 +33,11 @@ rexpect = "0.5"
 
 Simple example for interacting via ftp:
 
-```rust
+```rust,no_run
 use rexpect::spawn;
 use rexpect::error::*;
 
-fn do_ftp() -> Result<()> {
+fn do_ftp() -> Result<(), Error> {
     let mut p = spawn("ftp speedtest.tele2.net", Some(30_000))?;
     p.exp_regex("Name \\(.*\\):")?;
     p.send_line("anonymous")?;
@@ -60,11 +60,11 @@ fn main() {
 
 ### Example with bash and reading from programs
 
-```rust
+```rust,no_run
 use rexpect::spawn_bash;
 use rexpect::error::*;
 
-fn do_bash() -> Result<()> {
+fn do_bash() -> Result<(), Error> {
     let mut p = spawn_bash(Some(2000))?;
 
     // case 1: wait until program is done
@@ -110,11 +110,11 @@ goes into nirvana. There are two functions to ensure that:
 
 
 
-```rust
+```rust,no_run
 use rexpect::spawn_bash;
 use rexpect::error::*;
 
-fn do_bash_jobcontrol() -> Result<()> {
+fn do_bash_jobcontrol() -> Result<(), Error> {
     let mut p = spawn_bash(Some(1000))?;
     p.execute("ping 8.8.8.8", "bytes of data")?;
     p.send_control('z')?;
