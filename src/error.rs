@@ -39,4 +39,8 @@ pub enum Error {
 
     #[error("The provided program arguments cannot be parsed")]
     BadProgramArguments,
+
+    #[cfg(feature = "which")]
+    #[error(transparent)]
+    Which(#[from] which::Error),
 }

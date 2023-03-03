@@ -232,6 +232,10 @@ pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession, Error
 
 /// See `spawn`
 pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession, Error> {
+    #[cfg(feature = "which")]
+    {
+        let _ = which::which(command.get_program())?;
+    }
     let mut process = PtyProcess::new(command)?;
     process.set_kill_timeout(timeout_ms);
 
