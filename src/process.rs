@@ -7,7 +7,7 @@ use nix::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use nix::pty::{grantpt, posix_openpt, unlockpt, PtyMaster};
 pub use nix::sys::{signal, wait};
 use nix::sys::{stat, termios};
-use nix::unistd::{dup, dup2, fork, setsid, ForkResult, Pid};
+use nix::unistd::{close, dup, dup2, fork, setsid, ForkResult, Pid};
 use std;
 use std::fs::File;
 use std::os::unix::io::{AsRawFd, FromRawFd};
@@ -97,6 +97,9 @@ impl PtyProcess {
 
         match unsafe { fork()? } {
             ForkResult::Child => {
+                // Avoid leaking master fd
+                close(master_fd.as_raw_fd())?;
+
                 setsid()?; // create new session with child as session leader
                 let slave_fd = open(
                     std::path::Path::new(&slave_name),
@@ -108,6 +111,11 @@ impl PtyProcess {
                 dup2(slave_fd, STDIN_FILENO)?;
                 dup2(slave_fd, STDOUT_FILENO)?;
                 dup2(slave_fd, STDERR_FILENO)?;
+
+                // Avoid leaking slave fd
+                if slave_fd > STDERR_FILENO {
+                    close(slave_fd)?;
+                }
 
                 // set echo off
                 let mut flags = termios::tcgetattr(STDIN_FILENO)?;
