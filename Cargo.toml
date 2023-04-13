@@ -1,7 +1,7 @@
 [package]
 description = "Interact with unix processes/bash the same way as pexpect or Don libes expect does"
 name        = "rexpect"
-version     = "0.5.0"
+version     = "0.6.0"
 authors     = ["Philipp Keller <philipp.keller@gmail.com>"]
 edition     = "2021"
 repository  = "https://github.com/rust-cli/rexpect"
