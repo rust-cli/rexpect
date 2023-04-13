@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.6.0] 2024-01-22
+
+### Changed
+
+- PtyProcess::get_file_handle() returns an error if dup() fails
+- spawn_bash() returns error if tempfile::NamedTempFile::new() or write!() fails
+- Option to skip ansi escape codes
+- Updated "nix" requirement
+- "which" functionality was added (feature gated)
+- MSRV updated to 1.63.0
+
+### Fixed
+
+- file descriptor leak was fixed in PtyProcess::new()
+- Documentation cleanup
+
 ## [0.5.0] 2022-10-09
 
 ### Changed
