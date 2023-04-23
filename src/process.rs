@@ -96,6 +96,11 @@ impl PtyProcess {
         // on Linux this is the libc function, on OSX this is our implementation of ptsname_r
         let slave_name = ptsname_r(&master_fd)?;
 
+        // set echo off
+        let mut flags = termios::tcgetattr(master_fd.as_raw_fd())?;
+        flags.local_flags.remove(termios::LocalFlags::ECHO);
+        termios::tcsetattr(master_fd.as_raw_fd(), termios::SetArg::TCSANOW, &flags)?;
+
         match unsafe { fork()? } {
             ForkResult::Child => {
                 // Avoid leaking master fd
