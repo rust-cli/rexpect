@@ -3,6 +3,7 @@
 use crate::error::Error;
 use nix;
 use nix::fcntl::{open, OFlag};
+use nix::libc::{ioctl, TIOCSCTTY};
 use nix::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use nix::pty::{grantpt, posix_openpt, unlockpt, PtyMaster};
 pub use nix::sys::{signal, wait};
@@ -111,6 +112,13 @@ impl PtyProcess {
                 dup2(slave_fd, STDIN_FILENO)?;
                 dup2(slave_fd, STDOUT_FILENO)?;
                 dup2(slave_fd, STDERR_FILENO)?;
+
+                unsafe {
+                    match ioctl(master_fd.as_raw_fd(), TIOCSCTTY) {
+                        0 => Ok(()),
+                        _ => Err(nix::Error::last()),
+                    }?;
+                }
 
                 // Avoid leaking slave fd
                 if slave_fd > STDERR_FILENO {
