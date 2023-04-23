@@ -342,7 +342,7 @@ impl Drop for PtyReplSession {
         if let Some(ref cmd) = self.quit_command {
             self.pty_session
                 .send_line(cmd)
-                .expect("could not run `exit` on bash process");
+                .expect(&format!("could not run `{}` on child process", cmd));
         }
     }
 }
