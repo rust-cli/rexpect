@@ -29,8 +29,9 @@ impl<W: Write> StreamSession<W> {
     /// this is guaranteed to be flushed to the process
     /// returns number of written bytes
     pub fn send_line(&mut self, line: &str) -> Result<usize, Error> {
-        let mut len = self.send(line)?;
+        let mut len = self.send_internal(line)?;
         len += self.writer.write(&[b'\n'])?;
+        std::thread::sleep(std::time::Duration::from_millis(10));
         Ok(len)
     }
 
@@ -39,6 +40,12 @@ impl<W: Write> StreamSession<W> {
     ///
     /// Returns number of written bytes
     pub fn send(&mut self, s: &str) -> Result<usize, Error> {
+        let len = self.send_internal(s)?;
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        Ok(len)
+    }
+
+    fn send_internal(&mut self, s: &str) -> Result<usize, Error> {
         self.writer.write(s.as_bytes()).map_err(Error::from)
     }
 
