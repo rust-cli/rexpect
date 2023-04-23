@@ -20,7 +20,7 @@
 //! use rexpect::error::Error;
 //!
 //! fn main() -> Result<(), Error> {
-//!     let mut p = spawn("ftp speedtest.tele2.net", Some(2000), false)?;
+//!     let mut p = spawn("ftp speedtest.tele2.net", Some(2000))?;
 //!     p.exp_regex("Name \\(.*\\):")?;
 //!     p.send_line("anonymous")?;
 //!     p.exp_string("Password")?;
@@ -50,7 +50,7 @@
 //! use rexpect::error::Error;
 //!
 //! fn main() -> Result<(), Error> {
-//!     let mut p = spawn_bash(Some(30_000), false)?;
+//!     let mut p = spawn_bash(Some(30_000))?;
 //!     p.execute("ping 8.8.8.8", "bytes of data")?;
 //!     p.send_control('z')?;
 //!     p.wait_for_prompt()?;
@@ -70,7 +70,7 @@ pub mod reader;
 pub mod session;
 
 pub use reader::ReadUntil;
-pub use session::{spawn, spawn_bash, spawn_python, spawn_stream};
+pub use session::{spawn, spawn_bash, spawn_python, spawn_stream, spawn_with_options};
 
 // include the README.md here to test its doc
 #[doc = include_str!("../README.md")]

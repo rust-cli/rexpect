@@ -2,7 +2,7 @@ use rexpect::error::Error;
 use rexpect::spawn;
 
 fn main() -> Result<(), Error> {
-    let mut p = spawn("ftp speedtest.tele2.net", Some(2000), false)?;
+    let mut p = spawn("ftp speedtest.tele2.net", Some(2000))?;
     p.exp_regex("Name \\(.*\\):")?;
     p.send_line("anonymous")?;
     p.exp_string("Password")?;

@@ -7,13 +7,13 @@ use rexpect::spawn;
 /// cat exited with code 1
 /// Output (stdout and stderr): cat: /this/does/not/exist: No such file or directory
 fn main() -> Result<(), Error> {
-    let p = spawn("cat /etc/passwd", Some(2000), false)?;
+    let p = spawn("cat /etc/passwd", Some(2000))?;
     match p.process.wait() {
         Ok(wait::WaitStatus::Exited(_, 0)) => println!("cat exited with code 0, all good!"),
         _ => println!("cat exited with code >0, or it was killed"),
     }
 
-    let mut p = spawn("cat /this/does/not/exist", Some(2000), false)?;
+    let mut p = spawn("cat /this/does/not/exist", Some(2000))?;
     match p.process.wait() {
         Ok(wait::WaitStatus::Exited(_, 0)) => println!("cat succeeded"),
         Ok(wait::WaitStatus::Exited(_, c)) => {

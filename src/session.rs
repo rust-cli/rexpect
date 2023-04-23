@@ -2,8 +2,8 @@
 
 use crate::error::Error; // load error-chain
 use crate::process::PtyProcess;
-pub use crate::reader::ReadUntil;
 use crate::reader::{NBReader, Regex};
+pub use crate::reader::{Options, ReadUntil};
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::LineWriter;
@@ -17,10 +17,10 @@ pub struct StreamSession<W: Write> {
 }
 
 impl<W: Write> StreamSession<W> {
-    pub fn new<R: Read + Send + 'static>(reader: R, writer: W, timeout_ms: Option<u64>, strip_ansi_escape_codes: bool) -> Self {
+    pub fn new<R: Read + Send + 'static>(reader: R, writer: W, options: Options) -> Self {
         Self {
             writer: LineWriter::new(writer),
-            reader: NBReader::new(reader, timeout_ms, strip_ansi_escape_codes),
+            reader: NBReader::new(reader, options),
         }
     }
 
@@ -138,7 +138,7 @@ impl<W: Write> StreamSession<W> {
     ///
     /// # fn main() {
     ///     # || -> Result<(), Error> {
-    /// let mut s = spawn("cat", Some(1000), false)?;
+    /// let mut s = spawn("cat", Some(1000))?;
     /// s.send_line("hello, polly!")?;
     /// s.exp_any(vec![ReadUntil::String("hello".into()),
     ///                ReadUntil::EOF])?;
@@ -182,7 +182,7 @@ impl DerefMut for PtySession {
 ///
 /// # fn main() {
 ///     # || -> Result<(), Error> {
-/// let mut s = spawn("cat", Some(1000), false)?;
+/// let mut s = spawn("cat", Some(1000))?;
 /// s.send_line("hello, polly!")?;
 /// let line = s.read_line()?;
 /// assert_eq!("hello, polly!", line);
@@ -191,10 +191,10 @@ impl DerefMut for PtySession {
 /// # }
 /// ```
 impl PtySession {
-    fn new(process: PtyProcess, timeout_ms: Option<u64>, strip_ansi_escape_codes: bool) -> Result<Self, Error> {
+    fn new(process: PtyProcess, options: Options) -> Result<Self, Error> {
         let f = process.get_file_handle()?;
         let reader = f.try_clone()?;
-        let stream = StreamSession::new(reader, f, timeout_ms, strip_ansi_escape_codes);
+        let stream = StreamSession::new(reader, f, options);
         Ok(Self { process, stream })
     }
 }
@@ -218,7 +218,7 @@ fn tokenize_command(program: &str) -> Result<Vec<String>, Error> {
 ///   a problem the program just hangs instead of exiting with an
 ///   error message indicating where it stopped.
 ///   For automation 30'000 (30s, the default in pexpect) is a good value.
-pub fn spawn(program: &str, timeout_ms: Option<u64>, strip_ansi_escape_codes: bool) -> Result<PtySession, Error> {
+pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession, Error> {
     if program.is_empty() {
         return Err(Error::EmptyProgramName);
     }
@@ -227,19 +227,30 @@ pub fn spawn(program: &str, timeout_ms: Option<u64>, strip_ansi_escape_codes: bo
     let prog = parts.remove(0);
     let mut command = Command::new(prog);
     command.args(parts);
-    spawn_command(command, timeout_ms, strip_ansi_escape_codes)
+    spawn_command(command, timeout_ms)
 }
 
 /// See `spawn`
-pub fn spawn_command(command: Command, timeout_ms: Option<u64>, strip_ansi_escape_codes: bool) -> Result<PtySession, Error> {
+pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession, Error> {
+    spawn_with_options(
+        command,
+        Options {
+            timeout_ms,
+            strip_ansi_escape_codes: false,
+        },
+    )
+}
+
+/// See `spawn`
+pub fn spawn_with_options(command: Command, options: Options) -> Result<PtySession, Error> {
     #[cfg(feature = "which")]
     {
         let _ = which::which(command.get_program())?;
     }
     let mut process = PtyProcess::new(command)?;
-    process.set_kill_timeout(timeout_ms);
+    process.set_kill_timeout(options.timeout_ms);
 
-    PtySession::new(process, timeout_ms, strip_ansi_escape_codes)
+    PtySession::new(process, options)
 }
 
 /// A repl session: e.g. bash or the python shell:
@@ -291,7 +302,7 @@ impl PtyReplSession {
     ///
     /// # fn main() {
     ///     # || -> Result<(), Error> {
-    /// let mut p = spawn_bash(Some(1000), false)?;
+    /// let mut p = spawn_bash(Some(1000))?;
     /// p.execute("cat <(echo ready) -", "ready")?;
     /// p.send_line("hans")?;
     /// p.exp_string("hans")?;
@@ -370,7 +381,7 @@ impl Drop for PtyReplSession {
 /// Also: if you start a program you should use `execute` and not `send_line`.
 ///
 /// For an example see the README
-pub fn spawn_bash(timeout: Option<u64>, strip_ansi_escape_codes: bool) -> Result<PtyReplSession, Error> {
+pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession, Error> {
     // unfortunately working with a temporary tmpfile is the only
     // way to guarantee that we are "in step" with the prompt
     // all other attempts were futile, especially since we cannot
@@ -390,7 +401,7 @@ pub fn spawn_bash(timeout: Option<u64>, strip_ansi_escape_codes: bool) -> Result
         "--rcfile",
         rcfile.path().to_str().unwrap_or("temp file does not exist"),
     ]);
-    spawn_command(c, timeout, strip_ansi_escape_codes).and_then(|p| {
+    spawn_command(c, timeout).and_then(|p| {
         let new_prompt = "[REXPECT_PROMPT>";
         let mut pb = PtyReplSession {
             prompt: new_prompt.to_string(),
@@ -410,8 +421,8 @@ pub fn spawn_bash(timeout: Option<u64>, strip_ansi_escape_codes: bool) -> Result
 /// Spawn the python shell
 ///
 /// This is just a proof of concept implementation (and serves for documentation purposes)
-pub fn spawn_python(timeout: Option<u64>, strip_ansi_escape_codes: bool) -> Result<PtyReplSession, Error> {
-    spawn_command(Command::new("python"), timeout, strip_ansi_escape_codes).map(|p| PtyReplSession {
+pub fn spawn_python(timeout: Option<u64>) -> Result<PtyReplSession, Error> {
+    spawn_command(Command::new("python"), timeout).map(|p| PtyReplSession {
         prompt: ">>> ".to_string(),
         pty_session: p,
         quit_command: Some("exit()".to_string()),
@@ -425,7 +436,14 @@ pub fn spawn_stream<R: Read + Send + 'static, W: Write>(
     writer: W,
     timeout_ms: Option<u64>,
 ) -> StreamSession<W> {
-    StreamSession::new(reader, writer, timeout_ms, false)
+    StreamSession::new(
+        reader,
+        writer,
+        Options {
+            timeout_ms,
+            strip_ansi_escape_codes: false,
+        },
+    )
 }
 
 #[cfg(test)]
@@ -434,7 +452,7 @@ mod tests {
 
     #[test]
     fn test_read_line() -> Result<(), Error> {
-        let mut s = spawn("cat", Some(100000), false)?;
+        let mut s = spawn("cat", Some(100000))?;
         s.send_line("hans")?;
         assert_eq!("hans", s.read_line()?);
         let should = crate::process::wait::WaitStatus::Signaled(
@@ -448,7 +466,7 @@ mod tests {
 
     #[test]
     fn test_expect_eof_timeout() -> Result<(), Error> {
-        let mut p = spawn("sleep 3", Some(1000), false).expect("cannot run sleep 3");
+        let mut p = spawn("sleep 3", Some(1000)).expect("cannot run sleep 3");
         match p.exp_eof() {
             Ok(_) => panic!("should raise Timeout"),
             Err(Error::Timeout { .. }) => {}
@@ -459,13 +477,13 @@ mod tests {
 
     #[test]
     fn test_expect_eof_timeout2() {
-        let mut p = spawn("sleep 1", Some(1100), false).expect("cannot run sleep 1");
+        let mut p = spawn("sleep 1", Some(1100)).expect("cannot run sleep 1");
         assert!(p.exp_eof().is_ok(), "expected eof");
     }
 
     #[test]
     fn test_expect_string() -> Result<(), Error> {
-        let mut p = spawn("cat", Some(1000), false).expect("cannot run cat");
+        let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
         p.send_line("hello world!")?;
         p.exp_string("hello world!")?;
         p.send_line("hello heaven!")?;
@@ -475,7 +493,7 @@ mod tests {
 
     #[test]
     fn test_read_string_before() -> Result<(), Error> {
-        let mut p = spawn("cat", Some(1000), false).expect("cannot run cat");
+        let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
         p.send_line("lorem ipsum dolor sit amet")?;
         assert_eq!("lorem ipsum dolor sit ", p.exp_string("amet")?);
         Ok(())
@@ -483,7 +501,7 @@ mod tests {
 
     #[test]
     fn test_expect_any() -> Result<(), Error> {
-        let mut p = spawn("cat", Some(1000), false).expect("cannot run cat");
+        let mut p = spawn("cat", Some(1000)).expect("cannot run cat");
         p.send_line("Hi")?;
         match p.exp_any(vec![
             ReadUntil::NBytes(3),
@@ -497,7 +515,7 @@ mod tests {
 
     #[test]
     fn test_expect_empty_command_error() {
-        let p = spawn("", Some(1000), false);
+        let p = spawn("", Some(1000));
         match p {
             Ok(_) => panic!("should raise an error"),
             Err(Error::EmptyProgramName) => {}
@@ -507,7 +525,7 @@ mod tests {
 
     #[test]
     fn test_kill_timeout() -> Result<(), Error> {
-        let mut p = spawn_bash(Some(1000), false)?;
+        let mut p = spawn_bash(Some(1000))?;
         p.execute("cat <(echo ready) -", "ready")?;
         Ok(())
         // p is dropped here and kill is sent immediately to bash
@@ -516,7 +534,7 @@ mod tests {
 
     #[test]
     fn test_bash() -> Result<(), Error> {
-        let mut p = spawn_bash(Some(1000), false)?;
+        let mut p = spawn_bash(Some(1000))?;
         p.send_line("cd /tmp/")?;
         p.wait_for_prompt()?;
         p.send_line("pwd")?;
@@ -526,7 +544,7 @@ mod tests {
 
     #[test]
     fn test_bash_control_chars() -> Result<(), Error> {
-        let mut p = spawn_bash(Some(1000), false)?;
+        let mut p = spawn_bash(Some(1000))?;
         p.execute("cat <(echo ready) -", "ready")?;
         p.send_control('c')?; // abort: SIGINT
         p.wait_for_prompt()?;
