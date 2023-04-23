@@ -86,7 +86,7 @@ impl PtyProcess {
     /// Start a process in a forked pty
     pub fn new(mut command: Command) -> Result<Self, Error> {
         // Open a new PTY master
-        let master_fd = posix_openpt(OFlag::O_RDWR)?;
+        let master_fd = posix_openpt(OFlag::O_RDWR | OFlag::O_NOCTTY)?;
 
         // Allow a slave to be generated for it
         grantpt(&master_fd)?;
