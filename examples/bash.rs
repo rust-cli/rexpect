@@ -2,7 +2,7 @@ use rexpect::error::Error;
 use rexpect::spawn_bash;
 
 fn main() -> Result<(), Error> {
-    let mut p = spawn_bash(Some(1000))?;
+    let mut p = spawn_bash(Some(1000), false)?;
     p.execute("ping 8.8.8.8", "bytes")?;
     p.send_control('z')?;
     p.wait_for_prompt()?;

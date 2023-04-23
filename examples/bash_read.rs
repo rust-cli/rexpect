@@ -2,7 +2,7 @@ use rexpect::error::Error;
 use rexpect::spawn_bash;
 
 fn main() -> Result<(), Error> {
-    let mut p = spawn_bash(Some(2000))?;
+    let mut p = spawn_bash(Some(2000), false)?;
 
     // case 1: wait until program is done
     p.send_line("hostname")?;
