@@ -127,8 +127,16 @@ impl PtyProcess {
 
                 // set echo off
                 let mut flags = termios::tcgetattr(STDIN_FILENO)?;
-                flags.local_flags &= !termios::LocalFlags::ECHO;
+                flags.local_flags.remove(termios::LocalFlags::ECHO);
                 termios::tcsetattr(STDIN_FILENO, termios::SetArg::TCSANOW, &flags)?;
+
+                loop {
+                    flags = termios::tcgetattr(STDIN_FILENO)?;
+                    if !flags.local_flags.contains(termios::LocalFlags::ECHO) {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
 
                 command.exec();
                 Err(Error::Nix(nix::Error::last()))
