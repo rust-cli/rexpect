@@ -26,7 +26,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-      - uses: swatinem/rust-cache@v1
+      - uses: swatinem/rust-cache@v2
       - name: cargo-check
         uses: actions-rs/cargo@v1
         with:
@@ -51,7 +51,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-      - uses: swatinem/rust-cache@v1
+      - uses: swatinem/rust-cache@v2
       - name: cargo-test
         uses: actions-rs/cargo@v1
         with:
@@ -107,7 +107,7 @@ jobs:
         with:
           toolchain: 1.67.0
           components: clippy
-      - uses: swatinem/rust-cache@v1
+      - uses: swatinem/rust-cache@v2
       - name: cargo-clippy
         run: cargo clippy --all --all-targets --all-features
 
