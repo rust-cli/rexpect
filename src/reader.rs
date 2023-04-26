@@ -405,6 +405,23 @@ mod tests {
     }
 
     #[test]
+    fn test_skip_partial_ansi_code() {
+        let f = io::Cursor::new("\x1b[31;1;4mHello\x1b[1");
+        let mut r = NBReader::new(
+            f,
+            Options {
+                timeout_ms: None,
+                strip_ansi_escape_codes: true,
+            },
+        );
+        let bytes = r
+            .read_until(&ReadUntil::String("Hello".to_string()))
+            .unwrap();
+        assert_eq!(bytes, ("".to_string(), "Hello".to_string()));
+        assert_eq!(None, r.try_read());
+    }
+
+    #[test]
     fn test_skip_ansi_codes() {
         let f = io::Cursor::new("\x1b[31;1;4mHello\x1b[0m");
         let mut r = NBReader::new(
