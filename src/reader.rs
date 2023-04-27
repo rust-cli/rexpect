@@ -136,6 +136,7 @@ impl NBReader {
         thread::spawn(move || -> Result<(), Error> {
             let mut reader = BufReader::new(f);
             let mut byte = [0u8];
+            let mut in_escape_code = false;
 
             loop {
                 match reader.read(&mut byte) {
@@ -146,10 +147,10 @@ impl NBReader {
                     }
                     Ok(_) => {
                         if options.strip_ansi_escape_codes && byte[0] == 27 {
-                            while let Ok(_) = reader.read(&mut byte) {
-                                if char::from(byte[0]).is_alphabetic() {
-                                    break;
-                                }
+                            in_escape_code = true;
+                        } else if options.strip_ansi_escape_codes && in_escape_code {
+                            if char::from(byte[0]).is_alphabetic() {
+                                in_escape_code = false;
                             }
                         } else {
                             tx.send(Ok(PipedChar::Char(byte[0])))
