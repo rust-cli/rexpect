@@ -1,6 +1,7 @@
 //! Unblocking reader which supports waiting for strings/regexes and EOF to be present
 
 use crate::error::Error;
+use crate::encoding::Encoding;
 pub use regex::Regex;
 use std::io::prelude::*;
 use std::io::{self, BufReader};
@@ -108,6 +109,7 @@ pub struct NBReader {
     buffer: String,
     eof: bool,
     timeout: Option<time::Duration>,
+    encoding: Encoding,
 }
 
 impl NBReader {
@@ -154,6 +156,7 @@ impl NBReader {
             buffer: String::with_capacity(1024),
             eof: false,
             timeout: timeout.map(time::Duration::from_millis),
+            encoding: Encoding::UTF8,
         }
     }
 
@@ -162,21 +165,22 @@ impl NBReader {
         if self.eof {
             return Ok(());
         }
-        // FIXME: Temporary flag to demonstrate utf-8 capabilities
-        let unicode = true;
+        // NOTE: When UTF-8 mode is on, there is no handling to salvage a
+        // stream of chars if a broken unicode char is not completed.
         let mut char_buf: Vec<u8> = Vec::new();
 
         while let Ok(from_channel) = self.reader.try_recv() {
             match from_channel {
                 Ok(PipedChar::Char(c)) => {
-                    if unicode {
-                        char_buf.push(c);
-                        if let Ok(s) = std::str::from_utf8(&char_buf) {
-                            self.buffer.push(s.chars().next().unwrap());
-                            char_buf.clear();
+                    match &self.encoding {
+                        Encoding::ASCII => self.buffer.push(c as char),
+                        Encoding::UTF8 => {
+                            char_buf.push(c);
+                            if let Ok(s) = std::str::from_utf8(&char_buf) {
+                                self.buffer.push(s.chars().next().unwrap());
+                                char_buf.clear();
+                            }
                         }
-                    } else {
-                        self.buffer.push(c as char)
                     }
                 },
                 Ok(PipedChar::EOF) => self.eof = true,
