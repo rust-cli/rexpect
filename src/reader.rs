@@ -162,9 +162,23 @@ impl NBReader {
         if self.eof {
             return Ok(());
         }
+        // FIXME: Temporary flag to demonstrate utf-8 capabilities
+        let unicode = true;
+        let mut char_buf: Vec<u8> = Vec::new();
+
         while let Ok(from_channel) = self.reader.try_recv() {
             match from_channel {
-                Ok(PipedChar::Char(c)) => self.buffer.push(c as char),
+                Ok(PipedChar::Char(c)) => {
+                    if unicode {
+                        char_buf.push(c);
+                        if let Ok(s) = std::str::from_utf8(&char_buf) {
+                            self.buffer.push(s.chars().next().unwrap());
+                            char_buf.clear();
+                        }
+                    } else {
+                        self.buffer.push(c as char)
+                    }
+                },
                 Ok(PipedChar::EOF) => self.eof = true,
                 // this is just from experience, e.g. "sleep 5" returns the other error which
                 // most probably means that there is no stdout stream at all -> send EOF
@@ -290,6 +304,22 @@ mod tests {
         let mut r = NBReader::new(f, None);
         assert_eq!(
             ("a melon".to_string(), "\r\n".to_string()),
+            r.read_until(&ReadUntil::String("\r\n".to_string()))
+                .expect("cannot read line")
+        );
+        // check for EOF
+        match r.read_until(&ReadUntil::NBytes(10)) {
+            Ok(_) => panic!(),
+            Err(Error::EOF { .. }) => {}
+            Err(_) => panic!(),
+        }
+    }
+    #[test]
+    fn test_expect_unicode() {
+        let f = io::Cursor::new("∀ melon\r\n");
+        let mut r = NBReader::new(f, None);
+        assert_eq!(
+            ("∀ melon".to_string(), "\r\n".to_string()),
             r.read_until(&ReadUntil::String("\r\n".to_string()))
                 .expect("cannot read line")
         );
