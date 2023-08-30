@@ -3,7 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/rexpect.svg)](https://crates.io/crates/rexpect)
 [![Released API docs](https://docs.rs/rexpect/badge.svg)](https://docs.rs/rexpect)
 [![Master API docs](https://img.shields.io/badge/docs-master-2f343b.svg)](http://philippkeller.github.io/rexpect)
-[![MSRV](https://img.shields.io/badge/MSRV-1.63.0-blue)]
+[![MSRV](https://img.shields.io/badge/MSRV-1.65.0-blue)]
 
 Spawn, control, and respond to expected patterns of child applications and
 processes, enabling the automation of interactions and testing. Components
