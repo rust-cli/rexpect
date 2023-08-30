@@ -10,6 +10,7 @@ use nix::sys::{stat, termios};
 use nix::unistd::{close, dup, dup2, fork, setsid, ForkResult, Pid};
 use std;
 use std::fs::File;
+use std::io;
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::os::unix::process::CommandExt;
 use std::process::Command;
@@ -118,9 +119,10 @@ impl PtyProcess {
                 }
 
                 // set echo off
-                let mut flags = termios::tcgetattr(STDIN_FILENO)?;
+                let stdin = io::stdin();
+                let mut flags = termios::tcgetattr(&stdin)?;
                 flags.local_flags &= !termios::LocalFlags::ECHO;
-                termios::tcsetattr(STDIN_FILENO, termios::SetArg::TCSANOW, &flags)?;
+                termios::tcsetattr(&stdin, termios::SetArg::TCSANOW, &flags)?;
 
                 command.exec();
                 Err(Error::Nix(nix::Error::last()))
