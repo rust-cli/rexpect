@@ -2,8 +2,8 @@
 
 use crate::error::Error; // load error-chain
 use crate::process::PtyProcess;
-pub use crate::reader::ReadUntil;
 use crate::reader::{NBReader, Regex};
+pub use crate::reader::{Options, ReadUntil};
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::LineWriter;
@@ -17,10 +17,10 @@ pub struct StreamSession<W: Write> {
 }
 
 impl<W: Write> StreamSession<W> {
-    pub fn new<R: Read + Send + 'static>(reader: R, writer: W, timeout_ms: Option<u64>) -> Self {
+    pub fn new<R: Read + Send + 'static>(reader: R, writer: W, options: Options) -> Self {
         Self {
             writer: LineWriter::new(writer),
-            reader: NBReader::new(reader, timeout_ms),
+            reader: NBReader::new(reader, options),
         }
     }
 
@@ -172,11 +172,29 @@ impl DerefMut for PtySession {
 }
 
 /// Start a process in a tty session, write and read from it
+///
+/// # Example
+///
+/// ```
+///
+/// use rexpect::spawn;
+/// # use rexpect::error::Error;
+///
+/// # fn main() {
+///     # || -> Result<(), Error> {
+/// let mut s = spawn("cat", Some(1000))?;
+/// s.send_line("hello, polly!")?;
+/// let line = s.read_line()?;
+/// assert_eq!("hello, polly!", line);
+///         # Ok(())
+///     # }().expect("test failed");
+/// # }
+/// ```
 impl PtySession {
-    fn new(process: PtyProcess, timeout_ms: Option<u64>) -> Result<Self, Error> {
+    fn new(process: PtyProcess, options: Options) -> Result<Self, Error> {
         let f = process.get_file_handle()?;
         let reader = f.try_clone()?;
-        let stream = StreamSession::new(reader, f, timeout_ms);
+        let stream = StreamSession::new(reader, f, options);
         Ok(Self { process, stream })
     }
 }
@@ -214,14 +232,25 @@ pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession, Error
 
 /// See `spawn`
 pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession, Error> {
+    spawn_with_options(
+        command,
+        Options {
+            timeout_ms,
+            strip_ansi_escape_codes: false,
+        },
+    )
+}
+
+/// See `spawn`
+pub fn spawn_with_options(command: Command, options: Options) -> Result<PtySession, Error> {
     #[cfg(feature = "which")]
     {
         let _ = which::which(command.get_program())?;
     }
     let mut process = PtyProcess::new(command)?;
-    process.set_kill_timeout(timeout_ms);
+    process.set_kill_timeout(options.timeout_ms);
 
-    PtySession::new(process, timeout_ms)
+    PtySession::new(process, options)
 }
 
 /// A repl session: e.g. bash or the python shell:
@@ -407,7 +436,14 @@ pub fn spawn_stream<R: Read + Send + 'static, W: Write>(
     writer: W,
     timeout_ms: Option<u64>,
 ) -> StreamSession<W> {
-    StreamSession::new(reader, writer, timeout_ms)
+    StreamSession::new(
+        reader,
+        writer,
+        Options {
+            timeout_ms,
+            strip_ansi_escape_codes: false,
+        },
+    )
 }
 
 #[cfg(test)]
