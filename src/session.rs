@@ -6,20 +6,51 @@ use crate::reader::{NBReader, Regex};
 pub use crate::reader::{Options, ReadUntil};
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::LineWriter;
+use std::io::{LineWriter, stdout};
 use std::ops::{Deref, DerefMut};
 use std::process::Command;
 use tempfile;
 
+pub struct TeeWriter<W: Write> {
+    inner: W,
+    passthrough: bool,
+}
+
+impl<W: Write> TeeWriter<W> {
+    fn new(inner: W, passthrough: bool) -> Self {
+        TeeWriter { inner, passthrough }
+    }
+}
+
+// Implement the Write trait for your custom writer
+impl<W: Write> Write for TeeWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let c = self.inner.write(buf)?;
+        if self.passthrough {
+            stdout().write(buf)?;
+        }
+        Ok(c)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()?;
+        if self.passthrough {
+            stdout().flush()?;
+        }
+        Ok(())
+    }
+}
+
 pub struct StreamSession<W: Write> {
-    pub writer: LineWriter<W>,
+    pub writer: TeeWriter<LineWriter<W>>,
     pub reader: NBReader,
 }
 
 impl<W: Write> StreamSession<W> {
     pub fn new<R: Read + Send + 'static>(reader: R, writer: W, options: Options) -> Self {
         Self {
-            writer: LineWriter::new(writer),
+            writer: TeeWriter::new(
+                LineWriter::new(writer), options.passthrough),
             reader: NBReader::new(reader, options),
         }
     }
@@ -237,6 +268,7 @@ pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySes
         Options {
             timeout_ms,
             strip_ansi_escape_codes: false,
+            passthrough: false,
         },
     )
 }
@@ -442,6 +474,7 @@ pub fn spawn_stream<R: Read + Send + 'static, W: Write>(
         Options {
             timeout_ms,
             strip_ansi_escape_codes: false,
+            passthrough: false,
         },
     )
 }
