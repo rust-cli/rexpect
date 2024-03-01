@@ -72,7 +72,7 @@ pub mod session;
 
 pub use encoding::Encoding;
 pub use reader::ReadUntil;
-pub use session::{spawn, spawn_bash, spawn_python, spawn_stream};
+pub use session::{spawn, spawn_bash, spawn_python, spawn_stream, spawn_with_options};
 
 // include the README.md here to test its doc
 #[doc = include_str!("../README.md")]

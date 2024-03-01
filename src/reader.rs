@@ -1,7 +1,7 @@
 //! Unblocking reader which supports waiting for strings/regexes and EOF to be present
 
-use crate::error::Error;
 use crate::encoding::Encoding;
+use crate::error::Error;
 pub use regex::Regex;
 use std::io::prelude::*;
 use std::io::{self, BufReader};
@@ -99,6 +99,19 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
     }
 }
 
+/// Options for NBReader
+///
+/// - timeout:
+///  + `None`: read_until is blocking forever. This is probably not what you want
+///  + `Some(millis)`: after millis milliseconds a timeout error is raised
+/// - strip_ansi_escape_codes: Whether to filter out escape codes, such as colors.
+#[derive(Default)]
+pub struct Options {
+    pub timeout_ms: Option<u64>,
+    pub strip_ansi_escape_codes: bool,
+    pub encoding: Encoding,
+}
+
 /// Non blocking reader
 ///
 /// Typically you'd need that to check for output of a process without blocking your thread.
@@ -118,16 +131,16 @@ impl NBReader {
     /// # Arguments:
     ///
     /// - f: file like object
-    /// - timeout:
-    ///  + `None`: read_until is blocking forever. This is probably not what you want
-    ///  + `Some(millis)`: after millis milliseconds a timeout error is raised
-    pub fn new<R: Read + Send + 'static>(f: R, timeout: Option<u64>) -> NBReader {
+    /// - options: see `Options`
+    pub fn new<R: Read + Send + 'static>(f: R, options: Options) -> NBReader {
         let (tx, rx) = channel();
 
         // spawn a thread which reads one char and sends it to tx
         thread::spawn(move || -> Result<(), Error> {
             let mut reader = BufReader::new(f);
             let mut byte = [0u8];
+            let mut in_escape_code = false;
+
             loop {
                 match reader.read(&mut byte) {
                     Ok(0) => {
@@ -136,8 +149,16 @@ impl NBReader {
                         break;
                     }
                     Ok(_) => {
-                        tx.send(Ok(PipedChar::Char(byte[0])))
-                            .map_err(|_| Error::MpscSendError)?;
+                        if options.strip_ansi_escape_codes && byte[0] == 27 {
+                            in_escape_code = true;
+                        } else if options.strip_ansi_escape_codes && in_escape_code {
+                            if char::from(byte[0]).is_alphabetic() {
+                                in_escape_code = false;
+                            }
+                        } else {
+                            tx.send(Ok(PipedChar::Char(byte[0])))
+                                .map_err(|_| Error::MpscSendError)?;
+                        }
                     }
                     Err(error) => {
                         tx.send(Err(PipeError::IO(error)))
@@ -155,8 +176,8 @@ impl NBReader {
             reader: rx,
             buffer: String::with_capacity(1024),
             eof: false,
-            timeout: timeout.map(time::Duration::from_millis),
-            encoding: Encoding::UTF8,
+            timeout: options.timeout_ms.map(time::Duration::from_millis),
+            encoding: options.encoding,
         }
     }
 
@@ -171,15 +192,13 @@ impl NBReader {
 
         while let Ok(from_channel) = self.reader.try_recv() {
             match from_channel {
-                Ok(PipedChar::Char(c)) => {
-                    match &self.encoding {
-                        Encoding::ASCII => self.buffer.push(c as char),
-                        Encoding::UTF8 => {
-                            char_buf.push(c);
-                            if let Ok(s) = std::str::from_utf8(&char_buf) {
-                                self.buffer.push(s.chars().next().unwrap());
-                                char_buf.clear();
-                            }
+                Ok(PipedChar::Char(c)) => match &self.encoding {
+                    Encoding::ASCII => self.buffer.push(c as char),
+                    Encoding::UTF8 => {
+                        char_buf.push(c);
+                        if let Ok(s) = std::str::from_utf8(&char_buf) {
+                            self.buffer.push(s.chars().next().unwrap());
+                            char_buf.clear();
                         }
                     }
                 },
@@ -222,11 +241,11 @@ impl NBReader {
     ///
     /// ```
     /// # use std::io::Cursor;
-    /// use rexpect::reader::{NBReader, ReadUntil, Regex};
+    /// use rexpect::reader::{NBReader, ReadUntil, Regex, Options};
     /// // instead of a Cursor you would put your process output or file here
     /// let f = Cursor::new("Hello, miss!\n\
     ///                         What do you mean: 'miss'?");
-    /// let mut e = NBReader::new(f, None);
+    /// let mut e = NBReader::new(f, Options::default());
     ///
     /// let (first_line, _) = e.read_until(&ReadUntil::String('\n'.to_string())).unwrap();
     /// assert_eq!("Hello, miss!", &first_line);
@@ -248,6 +267,7 @@ impl NBReader {
 
         loop {
             self.read_into_buffer()?;
+
             if let Some(tuple_pos) = find(needle, &self.buffer, self.eof) {
                 let first = self.buffer.drain(..tuple_pos.0).collect();
                 let second = self.buffer.drain(..tuple_pos.1 - tuple_pos.0).collect();
@@ -305,7 +325,7 @@ mod tests {
     #[test]
     fn test_expect_melon() {
         let f = io::Cursor::new("a melon\r\n");
-        let mut r = NBReader::new(f, None);
+        let mut r = NBReader::new(f, Options::default());
         assert_eq!(
             ("a melon".to_string(), "\r\n".to_string()),
             r.read_until(&ReadUntil::String("\r\n".to_string()))
@@ -321,7 +341,13 @@ mod tests {
     #[test]
     fn test_expect_unicode() {
         let f = io::Cursor::new("∀ melon\r\n");
-        let mut r = NBReader::new(f, None);
+        let mut r = NBReader::new(
+            f,
+            Options {
+                encoding: Encoding::UTF8,
+                ..Default::default()
+            },
+        );
         assert_eq!(
             ("∀ melon".to_string(), "\r\n".to_string()),
             r.read_until(&ReadUntil::String("\r\n".to_string()))
@@ -338,7 +364,7 @@ mod tests {
     #[test]
     fn test_regex() {
         let f = io::Cursor::new("2014-03-15");
-        let mut r = NBReader::new(f, None);
+        let mut r = NBReader::new(f, Options::default());
         let re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
         assert_eq!(
             ("".to_string(), "2014-03-15".to_string()),
@@ -350,7 +376,7 @@ mod tests {
     #[test]
     fn test_regex2() {
         let f = io::Cursor::new("2014-03-15");
-        let mut r = NBReader::new(f, None);
+        let mut r = NBReader::new(f, Options::default());
         let re = Regex::new(r"-\d{2}-").unwrap();
         assert_eq!(
             ("2014".to_string(), "-03-".to_string()),
@@ -362,7 +388,7 @@ mod tests {
     #[test]
     fn test_nbytes() {
         let f = io::Cursor::new("abcdef");
-        let mut r = NBReader::new(f, None);
+        let mut r = NBReader::new(f, Options::default());
         assert_eq!(
             ("".to_string(), "ab".to_string()),
             r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes")
@@ -380,7 +406,7 @@ mod tests {
     #[test]
     fn test_any_with_multiple_possible_matches() {
         let f = io::Cursor::new("zero one two three four five");
-        let mut r = NBReader::new(f, None);
+        let mut r = NBReader::new(f, Options::default());
 
         let result = r
             .read_until(&ReadUntil::Any(vec![
@@ -395,7 +421,7 @@ mod tests {
     #[test]
     fn test_any_with_same_start_different_length() {
         let f = io::Cursor::new("hi hello");
-        let mut r = NBReader::new(f, None);
+        let mut r = NBReader::new(f, Options::default());
 
         let result = r
             .read_until(&ReadUntil::Any(vec![
@@ -410,7 +436,7 @@ mod tests {
     #[test]
     fn test_eof() {
         let f = io::Cursor::new("lorem ipsum dolor sit amet");
-        let mut r = NBReader::new(f, None);
+        let mut r = NBReader::new(f, Options::default());
         r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes");
         assert_eq!(
             ("".to_string(), "rem ipsum dolor sit amet".to_string()),
@@ -419,9 +445,45 @@ mod tests {
     }
 
     #[test]
+    fn test_skip_partial_ansi_code() {
+        let f = io::Cursor::new("\x1b[31;1;4mHello\x1b[1");
+        let mut r = NBReader::new(
+            f,
+            Options {
+                timeout_ms: None,
+                strip_ansi_escape_codes: true,
+                ..Default::default()
+            },
+        );
+        let bytes = r
+            .read_until(&ReadUntil::String("Hello".to_string()))
+            .unwrap();
+        assert_eq!(bytes, ("".to_string(), "Hello".to_string()));
+        assert_eq!(None, r.try_read());
+    }
+
+    #[test]
+    fn test_skip_ansi_codes() {
+        let f = io::Cursor::new("\x1b[31;1;4mHello\x1b[0m");
+        let mut r = NBReader::new(
+            f,
+            Options {
+                timeout_ms: None,
+                strip_ansi_escape_codes: true,
+                ..Default::default()
+            },
+        );
+        let bytes = r
+            .read_until(&ReadUntil::String("Hello".to_string()))
+            .unwrap();
+        assert_eq!(bytes, ("".to_string(), "Hello".to_string()));
+        assert_eq!(None, r.try_read());
+    }
+
+    #[test]
     fn test_try_read() {
         let f = io::Cursor::new("lorem");
-        let mut r = NBReader::new(f, None);
+        let mut r = NBReader::new(f, Options::default());
         let bytes = r.read_until(&ReadUntil::NBytes(4)).unwrap();
         assert!(bytes.0.is_empty());
         assert_eq!(bytes.1, "lore");
