@@ -1,5 +1,6 @@
 //! Unblocking reader which supports waiting for strings/regexes and EOF to be present
 
+use crate::encoding::Encoding;
 use crate::error::Error;
 pub use regex::Regex;
 use std::io::prelude::*;
@@ -108,6 +109,7 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
 pub struct Options {
     pub timeout_ms: Option<u64>,
     pub strip_ansi_escape_codes: bool,
+    pub encoding: Encoding,
 }
 
 /// Non blocking reader
@@ -120,6 +122,7 @@ pub struct NBReader {
     buffer: String,
     eof: bool,
     timeout: Option<time::Duration>,
+    encoding: Encoding,
 }
 
 impl NBReader {
@@ -174,6 +177,7 @@ impl NBReader {
             buffer: String::with_capacity(1024),
             eof: false,
             timeout: options.timeout_ms.map(time::Duration::from_millis),
+            encoding: options.encoding,
         }
     }
 
@@ -182,9 +186,22 @@ impl NBReader {
         if self.eof {
             return Ok(());
         }
+        // NOTE: When UTF-8 mode is on, there is no handling to salvage a
+        // stream of chars if a broken unicode char is not completed.
+        let mut char_buf: Vec<u8> = Vec::new();
+
         while let Ok(from_channel) = self.reader.try_recv() {
             match from_channel {
-                Ok(PipedChar::Char(c)) => self.buffer.push(c as char),
+                Ok(PipedChar::Char(c)) => match &self.encoding {
+                    Encoding::ASCII => self.buffer.push(c as char),
+                    Encoding::UTF8 => {
+                        char_buf.push(c);
+                        if let Ok(s) = std::str::from_utf8(&char_buf) {
+                            self.buffer.push(s.chars().next().unwrap());
+                            char_buf.clear();
+                        }
+                    }
+                },
                 Ok(PipedChar::EOF) => self.eof = true,
                 // this is just from experience, e.g. "sleep 5" returns the other error which
                 // most probably means that there is no stdout stream at all -> send EOF
@@ -321,6 +338,28 @@ mod tests {
             Err(_) => panic!(),
         }
     }
+    #[test]
+    fn test_expect_unicode() {
+        let f = io::Cursor::new("∀ melon\r\n");
+        let mut r = NBReader::new(
+            f,
+            Options {
+                encoding: Encoding::UTF8,
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            ("∀ melon".to_string(), "\r\n".to_string()),
+            r.read_until(&ReadUntil::String("\r\n".to_string()))
+                .expect("cannot read line")
+        );
+        // check for EOF
+        match r.read_until(&ReadUntil::NBytes(10)) {
+            Ok(_) => panic!(),
+            Err(Error::EOF { .. }) => {}
+            Err(_) => panic!(),
+        }
+    }
 
     #[test]
     fn test_regex() {
@@ -413,6 +452,7 @@ mod tests {
             Options {
                 timeout_ms: None,
                 strip_ansi_escape_codes: true,
+                ..Default::default()
             },
         );
         let bytes = r
@@ -430,6 +470,7 @@ mod tests {
             Options {
                 timeout_ms: None,
                 strip_ansi_escape_codes: true,
+                ..Default::default()
             },
         );
         let bytes = r

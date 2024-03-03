@@ -4,6 +4,7 @@ use crate::error::Error; // load error-chain
 use crate::process::PtyProcess;
 use crate::reader::{NBReader, Regex};
 pub use crate::reader::{Options, ReadUntil};
+use crate::Encoding;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::LineWriter;
@@ -237,6 +238,7 @@ pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySes
         Options {
             timeout_ms,
             strip_ansi_escape_codes: false,
+            ..Default::default()
         },
     )
 }
@@ -442,6 +444,7 @@ pub fn spawn_stream<R: Read + Send + 'static, W: Write>(
         Options {
             timeout_ms,
             strip_ansi_escape_codes: false,
+            ..Default::default()
         },
     )
 }

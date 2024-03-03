@@ -64,11 +64,13 @@
 //! }
 //! ```
 
+pub mod encoding;
 pub mod error;
 pub mod process;
 pub mod reader;
 pub mod session;
 
+pub use encoding::Encoding;
 pub use reader::ReadUntil;
 pub use session::{spawn, spawn_bash, spawn_python, spawn_stream, spawn_with_options};
 
