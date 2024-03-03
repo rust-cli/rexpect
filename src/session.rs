@@ -232,7 +232,7 @@ pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession, Error
 }
 
 /// See `spawn`
-pub fn spawn_command(command: Command, timeout_ms: Option<u64>, encoding: Encoding) -> Result<PtySession, Error> {
+pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession, Error> {
     spawn_with_options(
         command,
         Options {
