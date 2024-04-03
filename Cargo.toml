@@ -14,7 +14,7 @@ rust-version = "1.60"
 
 [dependencies]
 comma = "1.0"
-nix = { version = "0.27", features = ["fs", "process", "signal", "term"] }
+nix = { version = "0.27", features = ["fs", "process", "signal", "term", "ioctl"] }
 regex = "1"
 tempfile = "3"
 thiserror = "1.0.34"
