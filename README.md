@@ -23,13 +23,6 @@ The goal is to offer a similar set of functionality as
 
 ### Basic usage
 
-Add this to your `Cargo.toml`
-
-```toml
-[dependencies]
-rexpect = "0.5"
-```
-
 Simple example for interacting via ftp:
 
 ```rust,no_run
