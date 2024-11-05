@@ -19,7 +19,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 - Fix https link to pexpect docs
 - Many clippy fixes
-- Remove unnecesary closures
+- Remove unnecessary closures
 - Fix EOF detection on nightly
 - Fix examples
 
