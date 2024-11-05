@@ -1,9 +1,8 @@
 # rexpect
 
-[![crates.io](https://img.shields.io/crates/v/rexpect.svg)](https://crates.io/crates/rexpect)
-[![Released API docs](https://docs.rs/rexpect/badge.svg)](https://docs.rs/rexpect)
-[![Master API docs](https://img.shields.io/badge/docs-master-2f343b.svg)](http://philippkeller.github.io/rexpect)
-[![MSRV](https://img.shields.io/badge/MSRV-1.65.0-blue)]
+[![Documentation](https://img.shields.io/badge/docs-master-blue.svg)][Documentation]
+![License](https://img.shields.io/crates/l/rexpect.svg)
+[![Crates Status](https://img.shields.io/crates/v/rexpect.svg)][Crates.io]
 
 Spawn, control, and respond to expected patterns of child applications and
 processes, enabling the automation of interactions and testing. Components
@@ -137,17 +136,22 @@ fn main() {
 
 ```
 
-## Project Status
+## License
 
-Rexpect covers more or less the features of pexpect. If you miss anything
-I'm happy to receive PRs or also Issue requests of course.
+Licensed under either of
 
-The tests cover most of the aspects and it should run out of the box for
-rust stable, beta and nightly on both Linux or Mac.
+* Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+* MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
 
-## Design decisions
+at your option.
 
-- use [nix](https://github.com/nix-rust/nix) (and avoid libc wherever possible)
-  to keep the code safe and clean
+### Contribution
 
-Licensed under [MIT License](LICENSE)
+Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in the work by you, as defined in the Apache-2.0
+license, shall be dual licensed as above, without any additional terms or
+conditions.
+
+
+[Crates.io]: https://crates.io/crates/rexpect
+[Documentation]: https://docs.rs/rexpect

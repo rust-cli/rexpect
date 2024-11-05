@@ -1,130 +1,177 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
-  push:
-    branches: [master, staging, trying]
   pull_request:
-    branches: [master]
+  push:
+    branches:
+    - main
 
 env:
+  RUST_BACKTRACE: 1
   CARGO_TERM_COLOR: always
+  CLICOLOR: 1
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
 
 jobs:
-  check:
-    name: check
+  ci:
+    permissions:
+      contents: none
+    name: CI
+    needs: [test, msrv, lockfile, docs, rustfmt, clippy, minimal-versions]
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - 1.65.0
-          - stable
-          - beta
+    if: "always()"
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-      - uses: swatinem/rust-cache@v2
-      - name: cargo-check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --all-features
-
-
+      - name: Failed
+        run: exit 1
+        if: "contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')"
   test:
-    name: test
-    runs-on: ubuntu-latest
+    name: Test
     strategy:
       matrix:
-        rust:
-          - 1.65.0
-          - stable
-          - beta
-          # - nightly
+        os: ["ubuntu-latest"]
+        rust: ["stable"]
+    continue-on-error: ${{ matrix.rust != 'stable' }}
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-      - uses: swatinem/rust-cache@v2
-      - name: cargo-test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all --all-features
-      - name: cargo-test-doc
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --doc
-
-
-  deny:
-    name: deny
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        checks:
-          - advisories
-          - bans licenses sources
-
-    # Prevent sudden announcement of a new advisory from failing ci:
-    continue-on-error: ${{ matrix.checks == 'advisories' }}
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: cargo-deny
-      uses: EmbarkStudios/cargo-deny-action@v1
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
       with:
-        command: check ${{ matrix.checks }}
-
-
-  fmt:
-    name: format
+        toolchain: ${{ matrix.rust }}
+    - uses: Swatinem/rust-cache@v2
+    - uses: taiki-e/install-action@cargo-hack
+    - name: Build
+      run: cargo test --workspace --no-run
+    - name: Test
+      run: cargo hack test --feature-powerset --workspace
+  msrv:
+    name: "Check MSRV"
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.65.0
-          components: rustfmt
-      - name: cargo-fmt
-        run: cargo fmt -- --check
-
-
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+    - uses: Swatinem/rust-cache@v2
+    - uses: taiki-e/install-action@cargo-hack
+    - name: Default features
+      run: cargo hack check --feature-powerset --locked --rust-version --ignore-private --workspace --all-targets
+  minimal-versions:
+    name: Minimal versions
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Install stable Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+    - name: Install nightly Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: nightly
+    - name: Downgrade dependencies to minimal versions
+      run: cargo +nightly generate-lockfile -Z minimal-versions
+    - name: Compile with minimal versions
+      run: cargo +stable check --workspace --all-features --locked
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+    - uses: Swatinem/rust-cache@v2
+    - name: "Is lockfile updated?"
+      run: cargo update --workspace --locked
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: "1.76"  # STABLE
+    - uses: Swatinem/rust-cache@v2
+    - name: Check documentation
+      env:
+        RUSTDOCFLAGS: -D warnings
+      run: cargo doc --workspace --all-features --no-deps --document-private-items
+  rustfmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: "1.76"  # STABLE
+        components: rustfmt
+    - uses: Swatinem/rust-cache@v2
+    - name: Check formatting
+      run: cargo fmt --all -- --check
   clippy:
     name: clippy
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write # to upload sarif results
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.67.0
-          components: clippy
-      - uses: swatinem/rust-cache@v2
-      - name: cargo-clippy
-        run: cargo clippy --all --all-targets --all-features
-
-
-  # We need some "accummulation" job here because bors fails (timeouts) to
-  # listen on matrix builds.
-  # Hence, we have some kind of dummy here that bors can listen on
-  ci-success:
-    name: CI
-    if: ${{ success() }}
-    needs:
-      - check
-      - deny
-      - fmt
-      - clippy
-      - test
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: "1.76"  # STABLE
+        components: clippy
+    - uses: Swatinem/rust-cache@v2
+    - name: Install SARIF tools
+      run: cargo install clippy-sarif --locked
+    - name: Install SARIF tools
+      run: cargo install sarif-fmt --locked
+    - name: Check
+      run: >
+        cargo clippy --workspace --all-features --all-targets --message-format=json -- -D warnings --allow deprecated
+        | clippy-sarif
+        | tee clippy-results.sarif
+        | sarif-fmt
+      continue-on-error: true
+    - name: Upload
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: clippy-results.sarif
+        wait-for-processing: true
+    - name: Report status
+      run: cargo clippy --workspace --all-features --all-targets -- -D warnings --allow deprecated
+  coverage:
+    name: Coverage
     runs-on: ubuntu-latest
     steps:
-      - name: CI succeeded
-        run: exit 0
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+    - uses: Swatinem/rust-cache@v2
+    - name: Install cargo-tarpaulin
+      run: cargo install cargo-tarpaulin
+    - name: Gather coverage
+      run: cargo tarpaulin --output-dir coverage --out lcov
+    - name: Publish to Coveralls
+      uses: coverallsapp/github-action@master
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}

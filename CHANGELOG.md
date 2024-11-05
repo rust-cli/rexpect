@@ -3,6 +3,9 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+<!-- next-header -->
+## [Unreleased] - ReleaseDate
+
 ## [0.5.0] 2022-10-09
 
 ### Changed
@@ -16,7 +19,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 - Fix https link to pexpect docs
 - Many clippy fixes
-- Remove unnecesary closures
+- Remove unnecessary closures
 - Fix EOF detection on nightly
 - Fix examples
 
@@ -67,3 +70,6 @@ All `exp_*` methods now also return the yet unread string and/or the matched str
 
 - each execution of rexpect left a temporary file in /tmp/ this is now no longer the case
 - try_read was blocking when there was no char ready (!) -> fixed
+
+<!-- next-url -->
+[Unreleased]: https://github.com/rust-cli/argfile/compare/v0.5.0...HEAD

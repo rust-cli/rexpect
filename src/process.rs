@@ -19,7 +19,7 @@ use std::{thread, time};
 /// Start a process in a forked tty so you can interact with it the same as you would
 /// within a terminal
 ///
-/// The process and pty session are killed upon dropping PtyProcess
+/// The process and pty session are killed upon dropping `PtyProcess`
 ///
 /// # Example
 ///
@@ -142,8 +142,8 @@ impl PtyProcess {
         unsafe { Ok(File::from_raw_fd(fd)) }
     }
 
-    /// At the drop of PtyProcess the running process is killed. This is blocking forever if
-    /// the process does not react to a normal kill. If kill_timeout is set the process is
+    /// At the drop of `PtyProcess` the running process is killed. This is blocking forever if
+    /// the process does not react to a normal kill. If `kill_timeout` is set the process is
     /// `kill -9`ed after duration
     pub fn set_kill_timeout(&mut self, timeout_ms: Option<u64>) {
         self.kill_timeout = timeout_ms.map(time::Duration::from_millis);
@@ -197,7 +197,7 @@ impl PtyProcess {
     /// Kill the process with a specific signal. This method blocks, until the process is dead
     ///
     /// repeatedly sends SIGTERM to the process until it died,
-    /// the pty session is closed upon dropping PtyMaster,
+    /// the pty session is closed upon dropping `PtyMaster`,
     /// so we don't need to explicitly do that here.
     ///
     /// if `kill_timeout` is set and a repeated sending of signal does not result in the process
@@ -218,10 +218,10 @@ impl PtyProcess {
                 Some(status) if status != wait::WaitStatus::StillAlive => return Ok(status),
                 Some(_) | None => thread::sleep(time::Duration::from_millis(100)),
             }
-            // kill -9 if timout is reached
+            // kill -9 if timeout is reached
             if let Some(timeout) = self.kill_timeout {
                 if start.elapsed() > timeout {
-                    signal::kill(self.child_pid, signal::Signal::SIGKILL).map_err(Error::from)?
+                    signal::kill(self.child_pid, signal::Signal::SIGKILL).map_err(Error::from)?;
                 }
             }
         }
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     /// Open cat, write string, read back string twice, send Ctrl^C and check that cat exited
-    fn test_cat() -> std::io::Result<()> {
+    fn test_cat() -> io::Result<()> {
         let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
         let f = process.get_file_handle().unwrap();
         let mut writer = LineWriter::new(&f);

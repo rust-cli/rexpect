@@ -8,7 +8,7 @@ fn main() -> Result<(), Error> {
     p.send_line("hostname")?;
     let hostname = p.read_line()?;
     p.wait_for_prompt()?; // go sure `hostname` is really done
-    println!("Current hostname: {}", hostname);
+    println!("Current hostname: {hostname}");
 
     // case 2: wait until done, only extract a few infos
     p.send_line("wc /etc/passwd")?;
@@ -17,17 +17,14 @@ fn main() -> Result<(), Error> {
     let (_, words) = p.exp_regex("[0-9]+")?;
     let (_, bytes) = p.exp_regex("[0-9]+")?;
     p.wait_for_prompt()?; // go sure `wc` is really done
-    println!(
-        "/etc/passwd has {} lines, {} words, {} chars",
-        lines, words, bytes
-    );
+    println!("/etc/passwd has {lines} lines, {words} words, {bytes} chars");
 
     // case 3: read while program is still executing
     p.execute("ping 8.8.8.8", "bytes of data")?; // returns when it sees "bytes of data" in output
     for _ in 0..5 {
         // times out if one ping takes longer than 2s
         let (_, duration) = p.exp_regex("[0-9. ]+ ms")?;
-        println!("Roundtrip time: {}", duration);
+        println!("Roundtrip time: {duration}");
     }
     p.send_control('c')?;
     Ok(())
