@@ -29,7 +29,7 @@ pub enum Error {
     Io(#[from] std::io::Error),
 
     #[error("Did not understand Ctrl-{}", .0)]
-    SendContolError(char),
+    SendControlError(char),
 
     #[error("Failed to send via MPSC channel")]
     MpscSendError,
