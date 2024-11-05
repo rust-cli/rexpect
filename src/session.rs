@@ -55,7 +55,7 @@ impl<W: Write> StreamSession<W> {
             ']' => 29,
             '^' => 30,
             '_' => 31,
-            _ => return Err(Error::SendContolError(c)),
+            _ => return Err(Error::SendControlError(c)),
         };
         self.writer.write_all(&[code])?;
         // stdout is line buffered, so needs a flush
