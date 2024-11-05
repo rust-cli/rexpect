@@ -6,6 +6,23 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Compatibility
+
+- `PtyProcess::get_file_handle()` returns an error if dup() fails
+- `spawn_bash()` returns error if `tempfile::NamedTempFile::new()` or `write!()` fails
+- Renamed `Error::SendContolError` to `Error::SendControlError`
+- MSRV updated to 1.65
+
+### Feature
+
+- "which" functionality was added (feature gated)
+- Option to skip ansi escape codes
+
+### Fixed
+
+- file descriptor leak was fixed in `PtyProcess::new()`
+- Documentation cleanup
+
 ## [0.5.0] 2022-10-09
 
 ### Changed
