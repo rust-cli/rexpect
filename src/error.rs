@@ -2,7 +2,7 @@ use std::time;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("EOF (End of File): Expected {} but got EOF after reading \"{}\" process terminated with {:?}", .expected, .got, .exit_code.as_ref().unwrap_or(&"unknown".to_string()))]
+    #[error("EOF (End of File): Expected {} but got EOF after reading \"{}\" process terminated with {:?}", .expected, .got, .exit_code.as_ref().unwrap_or(&"unknown".to_owned()))]
     EOF {
         expected: String,
         got: String,

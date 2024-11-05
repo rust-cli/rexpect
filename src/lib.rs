@@ -39,7 +39,7 @@
 //! # Example with bash
 //!
 //! Tip: try the chain of commands first in a bash session.
-//! The tricky thing is to get the wait_for_prompt right.
+//! The tricky thing is to get the `wait_for_prompt` right.
 //! What `wait_for_prompt` actually does is seeking to the next
 //! visible prompt. If you forgot to call this once your next call to
 //! `wait_for_prompt` comes out of sync and you're seeking to a prompt

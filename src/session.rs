@@ -30,7 +30,7 @@ impl<W: Write> StreamSession<W> {
     /// returns number of written bytes
     pub fn send_line(&mut self, line: &str) -> Result<usize, Error> {
         let mut len = self.send(line)?;
-        len += self.writer.write(&[b'\n'])?;
+        len += self.writer.write(b"\n")?;
         Ok(len)
     }
 
@@ -113,7 +113,7 @@ impl<W: Write> StreamSession<W> {
     /// Wait until provided string is seen on stdout of child process.
     /// Return the yet unread output (without the matched string)
     pub fn exp_string(&mut self, needle: &str) -> Result<String, Error> {
-        self.exp(&ReadUntil::String(needle.to_string()))
+        self.exp(&ReadUntil::String(needle.to_owned()))
             .map(|(s, _)| s)
     }
 
@@ -127,7 +127,7 @@ impl<W: Write> StreamSession<W> {
     /// Wait until any of the provided needles is found.
     ///
     /// Return a tuple with:
-    /// 1. the yet unread string, without the matching needle (empty in case of EOF and NBytes)
+    /// 1. the yet unread string, without the matching needle (empty in case of EOF and `NBytes`)
     /// 2. the matched string
     ///
     /// # Example:
@@ -260,11 +260,11 @@ pub struct PtyReplSession {
     /// the prompt, used for `wait_for_prompt`, e.g. ">>> " for python
     pub prompt: String,
 
-    /// the pty_session you prepared before (initiating the shell, maybe set a custom prompt, etc.)
+    /// the `pty_session` you prepared before (initiating the shell, maybe set a custom prompt, etc.)
     /// see `spawn_bash` for an example
     pub pty_session: PtySession,
 
-    /// if set, then the quit_command is called when this object is dropped
+    /// if set, then the `quit_command` is called when this object is dropped
     /// you need to provide this if the shell you're testing is not killed by just sending
     /// SIGTERM
     pub quit_command: Option<String>,
@@ -319,7 +319,7 @@ impl PtyReplSession {
         Ok(())
     }
 
-    /// send line to repl (and flush output) and then, if echo_on=true wait for the
+    /// send line to repl (and flush output) and then, if `echo_on=true` wait for the
     /// input to appear.
     /// Return: number of bytes written
     pub fn send_line(&mut self, line: &str) -> Result<usize, Error> {
@@ -347,13 +347,13 @@ impl DerefMut for PtyReplSession {
 
 impl Drop for PtyReplSession {
     /// for e.g. bash we *need* to run `quit` at the end.
-    /// if we leave that out, PtyProcess would try to kill the bash
+    /// if we leave that out, `PtyProcess` would try to kill the bash
     /// which would not work, as a SIGTERM is not enough to kill bash
     fn drop(&mut self) {
         if let Some(ref cmd) = self.quit_command {
             self.pty_session
                 .send_line(cmd)
-                .expect(&format!("could not run `{}` on child process", cmd));
+                .unwrap_or_else(|_| panic!("could not run `{cmd}` on child process"));
         }
     }
 }
@@ -363,9 +363,9 @@ impl Drop for PtyReplSession {
 ///
 /// The difference to `spawn` and `spawn_command` is:
 ///
-/// - spawn_bash starts bash with a custom rcfile which guarantees
+/// - `spawn_bash` starts bash with a custom rcfile which guarantees
 ///   a certain prompt
-/// - the PtyBashSession also provides `wait_for_prompt` and `execute`
+/// - the `PtyBashSession` also provides `wait_for_prompt` and `execute`
 ///
 /// timeout: the duration until which `exp_*` returns a timeout error, or None
 /// additionally, when dropping the bash prompt while bash is still blocked by a program
@@ -397,21 +397,22 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession, Error> {
                   unset PROMPT_COMMAND\n",
     )?;
     let mut c = Command::new("bash");
-    c.args(&[
+    c.args([
         "--rcfile",
         rcfile.path().to_str().unwrap_or("temp file does not exist"),
     ]);
     spawn_command(c, timeout).and_then(|p| {
         let new_prompt = "[REXPECT_PROMPT>";
         let mut pb = PtyReplSession {
-            prompt: new_prompt.to_string(),
+            prompt: new_prompt.to_owned(),
             pty_session: p,
-            quit_command: Some("quit".to_string()),
+            quit_command: Some("quit".to_owned()),
             echo_on: false,
         };
         pb.exp_string("~~~~")?;
         rcfile.close()?;
-        pb.send_line(&("PS1='".to_string() + new_prompt + "'"))?;
+        let ps1 = format!("PS1='{new_prompt}'");
+        pb.send_line(&ps1)?;
         // wait until the new prompt appears
         pb.wait_for_prompt()?;
         Ok(pb)
@@ -423,9 +424,9 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession, Error> {
 /// This is just a proof of concept implementation (and serves for documentation purposes)
 pub fn spawn_python(timeout: Option<u64>) -> Result<PtyReplSession, Error> {
     spawn_command(Command::new("python"), timeout).map(|p| PtyReplSession {
-        prompt: ">>> ".to_string(),
+        prompt: ">>> ".to_owned(),
         pty_session: p,
-        quit_command: Some("exit()".to_string()),
+        quit_command: Some("exit()".to_owned()),
         echo_on: true,
     })
 }
@@ -505,10 +506,10 @@ mod tests {
         p.send_line("Hi")?;
         match p.exp_any(vec![
             ReadUntil::NBytes(3),
-            ReadUntil::String("Hi".to_string()),
+            ReadUntil::String("Hi".to_owned()),
         ]) {
-            Ok(s) => assert_eq!(("".to_string(), "Hi".to_string()), s),
-            Err(e) => panic!("got error: {}", e),
+            Ok(s) => assert_eq!(("".to_owned(), "Hi".to_owned()), s),
+            Err(e) => panic!("got error: {e}"),
         }
         Ok(())
     }

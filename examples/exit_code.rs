@@ -17,7 +17,7 @@ fn main() -> Result<(), Error> {
     match p.process.wait() {
         Ok(wait::WaitStatus::Exited(_, 0)) => println!("cat succeeded"),
         Ok(wait::WaitStatus::Exited(_, c)) => {
-            println!("Cat failed with exit code {}", c);
+            println!("Cat failed with exit code {c}");
             println!("Output (stdout and stderr): {}", p.exp_eof()?);
         }
         // for other possible return types of wait()

@@ -5,8 +5,8 @@ pub use regex::Regex;
 use std::io::prelude::*;
 use std::io::{self, BufReader};
 use std::sync::mpsc::{channel, Receiver};
+use std::thread;
 use std::{fmt, time};
-use std::{result, thread};
 
 #[derive(Debug)]
 enum PipeError {
@@ -29,14 +29,14 @@ pub enum ReadUntil {
 }
 
 impl fmt::Display for ReadUntil {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let printable = match self {
-            ReadUntil::String(ref s) if s == "\n" => "\\n (newline)".to_string(),
-            ReadUntil::String(ref s) if s == "\r" => "\\r (carriage return)".to_string(),
-            ReadUntil::String(ref s) => format!("\"{}\"", s),
-            ReadUntil::Regex(ref r) => format!("Regex: \"{}\"", r),
-            ReadUntil::EOF => "EOF (End of File)".to_string(),
-            ReadUntil::NBytes(n) => format!("reading {} bytes", n),
+            ReadUntil::String(ref s) if s == "\n" => "\\n (newline)".to_owned(),
+            ReadUntil::String(ref s) if s == "\r" => "\\r (carriage return)".to_owned(),
+            ReadUntil::String(ref s) => format!("\"{s}\""),
+            ReadUntil::Regex(ref r) => format!("Regex: \"{r}\""),
+            ReadUntil::EOF => "EOF (End of File)".to_owned(),
+            ReadUntil::NBytes(n) => format!("reading {n} bytes"),
             ReadUntil::Any(ref v) => {
                 let mut res = Vec::new();
                 for r in v {
@@ -45,7 +45,7 @@ impl fmt::Display for ReadUntil {
                 res.join(", ")
             }
         };
-        write!(f, "{}", printable)
+        write!(f, "{printable}")
     }
 }
 
@@ -98,12 +98,12 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
     }
 }
 
-/// Options for NBReader
+/// Options for `NBReader`
 ///
 /// - timeout:
-///  + `None`: read_until is blocking forever. This is probably not what you want
+///  + `None`: `read_until` is blocking forever. This is probably not what you want
 ///  + `Some(millis)`: after millis milliseconds a timeout error is raised
-/// - strip_ansi_escape_codes: Whether to filter out escape codes, such as colors.
+/// - `strip_ansi_escape_codes`: Whether to filter out escape codes, such as colors.
 #[derive(Default)]
 pub struct Options {
     pub timeout_ms: Option<u64>,
@@ -116,7 +116,7 @@ pub struct Options {
 /// Internally a thread is spawned and the output is read ahead so when
 /// calling `read_line` or `read_until` it reads from an internal buffer
 pub struct NBReader {
-    reader: Receiver<result::Result<PipedChar, PipeError>>,
+    reader: Receiver<Result<PipedChar, PipeError>>,
     buffer: String,
     eof: bool,
     timeout: Option<time::Duration>,
@@ -192,7 +192,7 @@ impl NBReader {
                 Err(PipeError::IO(ref err)) => {
                     // For an explanation of why we use `raw_os_error` see:
                     // https://github.com/zhiburt/ptyprocess/commit/df003c8e3ff326f7d17bc723bc7c27c50495bb62
-                    self.eof = err.raw_os_error() == Some(5)
+                    self.eof = err.raw_os_error() == Some(5);
                 }
             }
         }
@@ -207,7 +207,7 @@ impl NBReader {
     ///
     /// There are different modes:
     ///
-    /// - `ReadUntil::String` searches for string (use '\n'.to_string() to search for newline).
+    /// - `ReadUntil::String` searches for string (use '\n'.`to_string()` to search for newline).
     ///   Returns not yet read data in first String, and needle in second String
     /// - `ReadUntil::Regex` searches for regex
     ///   Returns not yet read data in first String and matched regex in second String
@@ -310,8 +310,8 @@ mod tests {
         let f = io::Cursor::new("a melon\r\n");
         let mut r = NBReader::new(f, Options::default());
         assert_eq!(
-            ("a melon".to_string(), "\r\n".to_string()),
-            r.read_until(&ReadUntil::String("\r\n".to_string()))
+            ("a melon".to_owned(), "\r\n".to_owned()),
+            r.read_until(&ReadUntil::String("\r\n".to_owned()))
                 .expect("cannot read line")
         );
         // check for EOF
@@ -328,7 +328,7 @@ mod tests {
         let mut r = NBReader::new(f, Options::default());
         let re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
         assert_eq!(
-            ("".to_string(), "2014-03-15".to_string()),
+            ("".to_owned(), "2014-03-15".to_owned()),
             r.read_until(&ReadUntil::Regex(re))
                 .expect("regex doesn't match")
         );
@@ -340,7 +340,7 @@ mod tests {
         let mut r = NBReader::new(f, Options::default());
         let re = Regex::new(r"-\d{2}-").unwrap();
         assert_eq!(
-            ("2014".to_string(), "-03-".to_string()),
+            ("2014".to_owned(), "-03-".to_owned()),
             r.read_until(&ReadUntil::Regex(re))
                 .expect("regex doesn't match")
         );
@@ -351,15 +351,15 @@ mod tests {
         let f = io::Cursor::new("abcdef");
         let mut r = NBReader::new(f, Options::default());
         assert_eq!(
-            ("".to_string(), "ab".to_string()),
+            ("".to_owned(), "ab".to_owned()),
             r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes")
         );
         assert_eq!(
-            ("".to_string(), "cde".to_string()),
+            ("".to_owned(), "cde".to_owned()),
             r.read_until(&ReadUntil::NBytes(3)).expect("3 bytes")
         );
         assert_eq!(
-            ("".to_string(), "f".to_string()),
+            ("".to_owned(), "f".to_owned()),
             r.read_until(&ReadUntil::NBytes(4)).expect("4 bytes")
         );
     }
@@ -371,12 +371,12 @@ mod tests {
 
         let result = r
             .read_until(&ReadUntil::Any(vec![
-                ReadUntil::String("two".to_string()),
-                ReadUntil::String("one".to_string()),
+                ReadUntil::String("two".to_owned()),
+                ReadUntil::String("one".to_owned()),
             ]))
             .expect("finding string");
 
-        assert_eq!(("zero ".to_string(), "one".to_string()), result);
+        assert_eq!(("zero ".to_owned(), "one".to_owned()), result);
     }
 
     #[test]
@@ -386,12 +386,12 @@ mod tests {
 
         let result = r
             .read_until(&ReadUntil::Any(vec![
-                ReadUntil::String("hello".to_string()),
-                ReadUntil::String("hell".to_string()),
+                ReadUntil::String("hello".to_owned()),
+                ReadUntil::String("hell".to_owned()),
             ]))
             .expect("finding string");
 
-        assert_eq!(("hi ".to_string(), "hell".to_string()), result);
+        assert_eq!(("hi ".to_owned(), "hell".to_owned()), result);
     }
 
     #[test]
@@ -400,7 +400,7 @@ mod tests {
         let mut r = NBReader::new(f, Options::default());
         r.read_until(&ReadUntil::NBytes(2)).expect("2 bytes");
         assert_eq!(
-            ("".to_string(), "rem ipsum dolor sit amet".to_string()),
+            ("".to_owned(), "rem ipsum dolor sit amet".to_owned()),
             r.read_until(&ReadUntil::EOF).expect("reading until EOF")
         );
     }
@@ -416,9 +416,9 @@ mod tests {
             },
         );
         let bytes = r
-            .read_until(&ReadUntil::String("Hello".to_string()))
+            .read_until(&ReadUntil::String("Hello".to_owned()))
             .unwrap();
-        assert_eq!(bytes, ("".to_string(), "Hello".to_string()));
+        assert_eq!(bytes, ("".to_owned(), "Hello".to_owned()));
         assert_eq!(None, r.try_read());
     }
 
@@ -433,9 +433,9 @@ mod tests {
             },
         );
         let bytes = r
-            .read_until(&ReadUntil::String("Hello".to_string()))
+            .read_until(&ReadUntil::String("Hello".to_owned()))
             .unwrap();
-        assert_eq!(bytes, ("".to_string(), "Hello".to_string()));
+        assert_eq!(bytes, ("".to_owned(), "Hello".to_owned()));
         assert_eq!(None, r.try_read());
     }
 
