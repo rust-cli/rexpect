@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+## [0.6.0] - 2024-11-06
+
 ### Compatibility
 
 - `PtyProcess::get_file_handle()` returns an error if dup() fails
@@ -89,4 +91,5 @@ All `exp_*` methods now also return the yet unread string and/or the matched str
 - try_read was blocking when there was no char ready (!) -> fixed
 
 <!-- next-url -->
-[Unreleased]: https://github.com/rust-cli/argfile/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/rust-cli/rexpect/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/rust-cli/argfile/compare/v0.5.0...v0.6.0
