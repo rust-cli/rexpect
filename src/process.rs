@@ -3,7 +3,8 @@
 use crate::error::Error;
 use nix;
 use nix::fcntl::{open, OFlag};
-use nix::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
+use nix::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO, TIOCSWINSZ};
+pub use nix::pty::Winsize;
 use nix::pty::{grantpt, posix_openpt, unlockpt, PtyMaster};
 pub use nix::sys::{signal, wait};
 use nix::sys::{stat, termios};
@@ -15,6 +16,14 @@ use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::os::unix::process::CommandExt;
 use std::process::Command;
 use std::{thread, time};
+
+/// Options for PtyProcess
+///
+/// - dimensions: If given, sets the terminal size of the spawned process.
+#[derive(Default)]
+pub struct Options {
+    pub dimensions: Option<Winsize>,
+}
 
 /// Start a process in a forked tty so you can interact with it the same as you would
 /// within a terminal
@@ -85,7 +94,12 @@ fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
 
 impl PtyProcess {
     /// Start a process in a forked pty
-    pub fn new(mut command: Command) -> Result<Self, Error> {
+    pub fn new(command: Command) -> Result<Self, Error> {
+        Self::new_with_options(command, Options::default())
+    }
+
+    /// Start a process in a forked pty with the given options
+    pub fn new_with_options(mut command: Command, options: Options) -> Result<Self, Error> {
         // Open a new PTY master
         let master_fd = posix_openpt(OFlag::O_RDWR)?;
 
@@ -123,6 +137,11 @@ impl PtyProcess {
                 let mut flags = termios::tcgetattr(&stdin)?;
                 flags.local_flags &= !termios::LocalFlags::ECHO;
                 termios::tcsetattr(&stdin, termios::SetArg::TCSANOW, &flags)?;
+
+                if let Some(winsize) = &options.dimensions {
+                    nix::ioctl_write_ptr_bad!(_set_window_size, TIOCSWINSZ, Winsize);
+                    unsafe { _set_window_size(stdin.as_raw_fd(), winsize)? };
+                }
 
                 command.exec();
                 Err(Error::Nix(nix::Error::last()))
