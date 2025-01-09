@@ -124,7 +124,7 @@ impl PtyProcess {
                 flags.local_flags &= !termios::LocalFlags::ECHO;
                 termios::tcsetattr(&stdin, termios::SetArg::TCSANOW, &flags)?;
 
-                command.exec();
+                let _ = command.exec();
                 Err(Error::Nix(nix::Error::last()))
             }
             ForkResult::Parent { child: child_pid } => Ok(PtyProcess {
