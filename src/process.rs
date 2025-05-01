@@ -3,15 +3,17 @@
 use crate::error::Error;
 use nix;
 use nix::fcntl::{open, OFlag};
-use nix::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
+use nix::libc::STDERR_FILENO;
 use nix::pty::{grantpt, posix_openpt, unlockpt, PtyMaster};
 pub use nix::sys::{signal, wait};
 use nix::sys::{stat, termios};
-use nix::unistd::{close, dup, dup2, fork, setsid, ForkResult, Pid};
+use nix::unistd::{
+    close, dup, dup2_stderr, dup2_stdin, dup2_stdout, fork, setsid, ForkResult, Pid,
+};
 use std;
 use std::fs::File;
 use std::io;
-use std::os::unix::io::{AsRawFd, FromRawFd};
+use std::os::unix::io::AsRawFd;
 use std::os::unix::process::CommandExt;
 use std::process::Command;
 use std::{thread, time};
@@ -40,8 +42,8 @@ use std::{thread, time};
 /// # fn main() {
 ///
 /// let mut process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
-/// let fd = dup(process.pty.as_raw_fd()).unwrap();
-/// let f = unsafe { File::from_raw_fd(fd) };
+/// let fd = dup(&process.pty).unwrap();
+/// let f = File::from(fd);
 /// let mut writer = LineWriter::new(&f);
 /// let mut reader = BufReader::new(&f);
 /// process.exit().expect("could not terminate process");
@@ -109,12 +111,12 @@ impl PtyProcess {
                 )?;
 
                 // assign stdin, stdout, stderr to the tty, just like a terminal does
-                dup2(slave_fd, STDIN_FILENO)?;
-                dup2(slave_fd, STDOUT_FILENO)?;
-                dup2(slave_fd, STDERR_FILENO)?;
+                dup2_stdin(&slave_fd)?;
+                dup2_stdout(&slave_fd)?;
+                dup2_stderr(&slave_fd)?;
 
                 // Avoid leaking slave fd
-                if slave_fd > STDERR_FILENO {
+                if slave_fd.as_raw_fd() > STDERR_FILENO {
                     close(slave_fd)?;
                 }
 
@@ -138,8 +140,8 @@ impl PtyProcess {
     /// Get handle to pty fork for reading/writing
     pub fn get_file_handle(&self) -> Result<File, Error> {
         // needed because otherwise fd is closed both by dropping process and reader/writer
-        let fd = dup(self.pty.as_raw_fd())?;
-        unsafe { Ok(File::from_raw_fd(fd)) }
+        let fd = dup(&self.pty)?;
+        Ok(fd.into())
     }
 
     /// At the drop of `PtyProcess` the running process is killed. This is blocking forever if
