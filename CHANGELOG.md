@@ -6,6 +6,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Compatibility
+
+- MSRV updated to 1.70
+
+### Internal
+
+- Update `nix`, `which`, `thiserror`
+
 ## [0.6.0] - 2024-11-06
 
 ### Compatibility
