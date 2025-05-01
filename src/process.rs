@@ -42,8 +42,8 @@ use std::{thread, time};
 /// # fn main() {
 ///
 /// let mut process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
-/// let fd = dup(process.pty.as_raw_fd()).unwrap();
-/// let f = unsafe { File::from_raw_fd(fd) };
+/// let fd = dup(&process.pty).unwrap();
+/// let f = File::from(fd);
 /// let mut writer = LineWriter::new(&f);
 /// let mut reader = BufReader::new(&f);
 /// process.exit().expect("could not terminate process");
