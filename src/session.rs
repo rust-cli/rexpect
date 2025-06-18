@@ -397,6 +397,7 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession, Error> {
                   unset PROMPT_COMMAND\n",
     )?;
     let mut c = Command::new("bash");
+    c.env("TERM", "");
     c.args([
         "--rcfile",
         rcfile.path().to_str().unwrap_or("temp file does not exist"),
