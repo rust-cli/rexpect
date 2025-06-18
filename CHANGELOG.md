@@ -6,6 +6,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Fixes
+
+- Ensure consistent behavior through `TERM=`
+
 ## [0.6.1] - 2025-05-01
 
 ### Compatibility
