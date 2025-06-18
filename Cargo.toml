@@ -89,7 +89,7 @@ zero_sized_map_values = "warn"
 [package]
 name = "rexpect"
 description = "Interact with unix processes/bash the same way as pexpect or Don libes expect does"
-version = "0.6.1"
+version = "0.6.2"
 categories = ["os::unix-apis"]
 keywords = ["pty", "automation", "testing", "expect", "pexpect"]
 repository.workspace = true
