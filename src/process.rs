@@ -3,8 +3,8 @@
 use crate::error::Error;
 use nix;
 use nix::fcntl::{open, OFlag};
-use nix::libc::STDERR_FILENO;
-use nix::pty::{grantpt, posix_openpt, unlockpt, PtyMaster};
+use nix::libc::{ioctl, STDERR_FILENO, TIOCSCTTY};
+use nix::pty::{grantpt, unlockpt, PtyMaster};
 pub use nix::sys::{signal, wait};
 use nix::sys::{stat, termios};
 use nix::unistd::{
@@ -17,6 +17,8 @@ use std::os::unix::io::AsRawFd;
 use std::os::unix::process::CommandExt;
 use std::process::Command;
 use std::{thread, time};
+use std::os::fd::OwnedFd;
+use std::path::PathBuf;
 
 /// Start a process in a forked tty so you can interact with it the same as you would
 /// within a terminal
@@ -85,18 +87,94 @@ fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
     }
 }
 
+#[cfg(not(target_os = "openbsd"))]
+fn open_pty() -> nix::Result<OpenPty> {
+    // Open a new PTY master
+    let master_fd = nix::pty::posix_openpt(OFlag::O_RDWR)?;
+
+    // Allow a slave to be generated for it
+    grantpt(&master_fd)?;
+    unlockpt(&master_fd)?;
+
+    // on Linux this is the libc function, on OSX this is our implementation of ptsname_r
+    let slave_name = PathBuf::from(ptsname_r(&master_fd)?);
+
+    Ok(
+        OpenPty {
+            master_fd,
+            slave_fd: None,
+            slave_name,
+        }
+    )
+}
+
+#[cfg(target_os = "openbsd")]
+/// Open pty on OpenBSD
+///
+/// OpenBSD does not have either ptsname_r or the Linux's ioctls.
+/// pty(4) references and documents this method of pty creation
+fn open_pty() -> nix::Result<OpenPty> {
+    use crate::openbsd::{PATH_PTMDEV, PTMGET};
+    use crate::openbsd::ptmget;
+    use nix::libc::{c_char, ioctl, open, O_RDWR};
+    use std::ffi::CStr;
+    use std::os::fd::{FromRawFd, OwnedFd};
+
+    // ioctls on /dev/ptm is the underlying mechanism for pty management
+    // on OpenBSD
+    let fd = unsafe {
+        match open(PATH_PTMDEV.as_ptr() as *const c_char, O_RDWR) {
+            -1 => return Err(nix::Error::last()),
+            fd => OwnedFd::from_raw_fd(fd),
+        }
+    };
+
+    // here, we get the fds and names for the master and slave devices
+    // right away
+    let mut info = std::mem::MaybeUninit::<ptmget>::uninit();
+    let info = unsafe {
+        match ioctl(fd.as_raw_fd(), PTMGET.into(), info.as_mut_ptr()) {
+            -1 => return Err(nix::Error::last()),
+            _ => info.assume_init(),
+        }
+    };
+
+    let master_fd = unsafe {
+        PtyMaster::from_owned_fd(
+            OwnedFd::from_raw_fd(info.cfd)
+        )
+    };
+    let slave_fd = Some(
+        unsafe { OwnedFd::from_raw_fd(info.sfd) }
+    );
+
+    // on OpenBSD these are no-ops (only checking for the argument fd
+    // to be a pty master), but they may become required some day
+    grantpt(&master_fd)?;
+    unlockpt(&master_fd)?;
+
+    Ok(
+        OpenPty {
+            master_fd,
+            slave_fd,
+            slave_name: PathBuf::from(
+                unsafe { CStr::from_ptr(info.sn.as_ptr()) }
+                    .to_string_lossy().into_owned()
+            )
+        }
+    )
+}
+
+struct OpenPty {
+    master_fd: PtyMaster,
+    slave_fd: Option<OwnedFd>,
+    slave_name: PathBuf,
+}
+
 impl PtyProcess {
     /// Start a process in a forked pty
     pub fn new(mut command: Command) -> Result<Self, Error> {
-        // Open a new PTY master
-        let master_fd = posix_openpt(OFlag::O_RDWR)?;
-
-        // Allow a slave to be generated for it
-        grantpt(&master_fd)?;
-        unlockpt(&master_fd)?;
-
-        // on Linux this is the libc function, on OSX this is our implementation of ptsname_r
-        let slave_name = ptsname_r(&master_fd)?;
+        let OpenPty { master_fd, slave_fd, slave_name } = open_pty()?;
 
         match unsafe { fork()? } {
             ForkResult::Child => {
@@ -104,16 +182,27 @@ impl PtyProcess {
                 close(master_fd.as_raw_fd())?;
 
                 setsid()?; // create new session with child as session leader
-                let slave_fd = open(
-                    std::path::Path::new(&slave_name),
-                    OFlag::O_RDWR,
-                    stat::Mode::empty(),
-                )?;
+                let slave_fd = slave_fd
+                    .ok_or(()).or_else(|_|
+                        open(
+                            std::path::Path::new(&slave_name),
+                            OFlag::O_RDWR,
+                            stat::Mode::empty(),
+                        )
+                    )?;
 
                 // assign stdin, stdout, stderr to the tty, just like a terminal does
                 dup2_stdin(&slave_fd)?;
                 dup2_stdout(&slave_fd)?;
                 dup2_stderr(&slave_fd)?;
+
+                // While Linux and macOS are lenient with the requirements
+                // for receiving signals through the pty, OpenBSD does check
+                // the process's controlling terminal and this is necessary.
+                #[cfg(target_os = "openbsd")]
+                if unsafe { ioctl(slave_fd.as_raw_fd(), TIOCSCTTY.into()) } == -1 {
+                    return Err(nix::Error::last().into())
+                }
 
                 // Avoid leaking slave fd
                 if slave_fd.as_raw_fd() > STDERR_FILENO {
