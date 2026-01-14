@@ -273,12 +273,7 @@ impl NBReader {
                 if start.elapsed() > timeout {
                     return Err(Error::Timeout {
                         expected: needle.to_string(),
-                        got: self
-                            .buffer
-                            .clone()
-                            .replace('\n', "`\\n`\n")
-                            .replace('\r', "`\\r`")
-                            .replace('\u{1b}', "`^`"),
+                        got: self.buffer.clone(),
                         timeout,
                     });
                 }

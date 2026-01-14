@@ -2,7 +2,7 @@ use std::time;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("EOF (End of File): Expected {} but got EOF after reading \"{}\" process terminated with {:?}", .expected, .got, .exit_code.as_ref().unwrap_or(&"unknown".to_owned()))]
+    #[error("EOF (End of File): Expected {:?} but got EOF after reading {:?} process terminated with {:?}", .expected, .got, .exit_code.as_ref().unwrap_or(&"unknown".to_owned()))]
     EOF {
         expected: String,
         got: String,
@@ -12,7 +12,7 @@ pub enum Error {
     #[error("PipeError")]
     BrokenPipe,
 
-    #[error("Timeout Error: Expected {} but got \"{}\" (after waiting {} ms)", .expected, .got, (.timeout.as_secs() * 1000) as u32 + .timeout.subsec_millis())]
+    #[error("Timeout Error: Expected {:?} but got {:?} (after waiting {} ms)", .expected, .got, (.timeout.as_secs() * 1000) as u32 + .timeout.subsec_millis())]
     Timeout {
         expected: String,
         got: String,
