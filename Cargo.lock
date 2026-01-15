@@ -192,7 +192,7 @@ checksum = "dbb5fb1acd8a1a18b3dd5be62d25485eb770e05afb408a9627d14d451bae12da"
 
 [[package]]
 name = "rexpect"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "comma",
  "nix",
