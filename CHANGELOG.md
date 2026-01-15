@@ -6,6 +6,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Fixes
+
+- Don't pre-emptively escape values in `Error::Timeout`
+
 ## [0.6.2] - 2025-06-18
 
 ### Fixes
