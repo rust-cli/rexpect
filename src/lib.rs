@@ -64,7 +64,7 @@
 //! }
 //! ```
 
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(clippy::print_stderr)]
 #![warn(clippy::print_stdout)]
 
@@ -79,3 +79,7 @@ pub use session::{spawn, spawn_bash, spawn_python, spawn_stream, spawn_with_opti
 // include the README.md here to test its doc
 #[doc = include_str!("../README.md")]
 mod test {}
+
+#[doc = include_str!("../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;

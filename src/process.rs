@@ -126,7 +126,7 @@ impl PtyProcess {
                 flags.local_flags &= !termios::LocalFlags::ECHO;
                 termios::tcsetattr(&stdin, termios::SetArg::TCSANOW, &flags)?;
 
-                command.exec();
+                let _ = command.exec();
                 Err(Error::Nix(nix::Error::last()))
             }
             ForkResult::Parent { child: child_pid } => Ok(PtyProcess {
@@ -173,11 +173,7 @@ impl PtyProcess {
     /// ```
     ///
     pub fn status(&self) -> Option<wait::WaitStatus> {
-        if let Ok(status) = wait::waitpid(self.child_pid, Some(wait::WaitPidFlag::WNOHANG)) {
-            Some(status)
-        } else {
-            None
-        }
+        wait::waitpid(self.child_pid, Some(wait::WaitPidFlag::WNOHANG)).ok()
     }
 
     /// Wait until process has exited. This is a blocking call.
@@ -188,7 +184,7 @@ impl PtyProcess {
 
     /// Regularly exit the process, this method is blocking until the process is dead
     pub fn exit(&mut self) -> Result<wait::WaitStatus, Error> {
-        self.kill(signal::SIGTERM).map_err(Error::from)
+        self.kill(signal::SIGTERM)
     }
 
     /// Non-blocking variant of `kill()` (doesn't wait for process to be killed)
