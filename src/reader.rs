@@ -3,7 +3,7 @@
 use crate::error::Error;
 pub use regex::Regex;
 use std::io::prelude::*;
-use std::io::{self, BufReader};
+use std::io::{self, BufReader, stdout};
 use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 use std::{fmt, time};
@@ -108,6 +108,7 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
 pub struct Options {
     pub timeout_ms: Option<u64>,
     pub strip_ansi_escape_codes: bool,
+    pub passthrough: bool,
 }
 
 /// Non blocking reader
@@ -153,6 +154,11 @@ impl NBReader {
                                 in_escape_code = false;
                             }
                         } else {
+                            
+                            if options.passthrough {
+                                stdout().write_all(&byte)?;
+                            }
+
                             tx.send(Ok(PipedChar::Char(byte[0])))
                                 .map_err(|_| Error::MpscSendError)?;
                         }
@@ -183,8 +189,11 @@ impl NBReader {
             return Ok(());
         }
         while let Ok(from_channel) = self.reader.try_recv() {
+            
             match from_channel {
-                Ok(PipedChar::Char(c)) => self.buffer.push(c as char),
+                Ok(PipedChar::Char(c)) => {
+                    self.buffer.push(c as char)
+                },
                 Ok(PipedChar::EOF) => self.eof = true,
                 // this is just from experience, e.g. "sleep 5" returns the other error which
                 // most probably means that there is no stdout stream at all -> send EOF
@@ -408,6 +417,7 @@ mod tests {
             Options {
                 timeout_ms: None,
                 strip_ansi_escape_codes: true,
+                passthrough: false,
             },
         );
         let bytes = r
@@ -425,6 +435,7 @@ mod tests {
             Options {
                 timeout_ms: None,
                 strip_ansi_escape_codes: true,
+                passthrough: false,
             },
         );
         let bytes = r
