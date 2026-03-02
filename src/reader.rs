@@ -4,7 +4,7 @@ use crate::error::Error;
 pub use regex::Regex;
 use std::io::prelude::*;
 use std::io::{self, BufReader};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{Receiver, channel};
 use std::thread;
 use std::{fmt, time};
 
@@ -31,13 +31,13 @@ pub enum ReadUntil {
 impl fmt::Display for ReadUntil {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let printable = match self {
-            ReadUntil::String(ref s) if s == "\n" => "\\n (newline)".to_owned(),
-            ReadUntil::String(ref s) if s == "\r" => "\\r (carriage return)".to_owned(),
-            ReadUntil::String(ref s) => format!("\"{s}\""),
-            ReadUntil::Regex(ref r) => format!("Regex: \"{r}\""),
+            ReadUntil::String(s) if s == "\n" => "\\n (newline)".to_owned(),
+            ReadUntil::String(s) if s == "\r" => "\\r (carriage return)".to_owned(),
+            ReadUntil::String(s) => format!("\"{s}\""),
+            ReadUntil::Regex(r) => format!("Regex: \"{r}\""),
             ReadUntil::EOF => "EOF (End of File)".to_owned(),
             ReadUntil::NBytes(n) => format!("reading {n} bytes"),
-            ReadUntil::Any(ref v) => {
+            ReadUntil::Any(v) => {
                 let mut res = Vec::new();
                 for r in v {
                     res.push(r.to_string());
@@ -63,8 +63,8 @@ impl fmt::Display for ReadUntil {
 /// 2. position after match
 pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize)> {
     match needle {
-        ReadUntil::String(ref s) => buffer.find(s).map(|pos| (pos, pos + s.len())),
-        ReadUntil::Regex(ref pattern) => pattern.find(buffer).map(|mat| (mat.start(), mat.end())),
+        ReadUntil::String(s) => buffer.find(s).map(|pos| (pos, pos + s.len())),
+        ReadUntil::Regex(pattern) => pattern.find(buffer).map(|mat| (mat.start(), mat.end())),
         ReadUntil::EOF => {
             if eof {
                 Some((0, buffer.len()))
@@ -83,7 +83,7 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
                 None
             }
         }
-        ReadUntil::Any(ref anys) => anys
+        ReadUntil::Any(anys) => anys
             .iter()
             // Filter matching needles
             .filter_map(|any| find(any, buffer, eof))
