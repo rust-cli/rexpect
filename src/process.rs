@@ -2,13 +2,13 @@
 
 use crate::error::Error;
 use nix;
-use nix::fcntl::{open, OFlag};
+use nix::fcntl::{OFlag, open};
 use nix::libc::STDERR_FILENO;
-use nix::pty::{grantpt, posix_openpt, unlockpt, PtyMaster};
+use nix::pty::{PtyMaster, grantpt, posix_openpt, unlockpt};
 pub use nix::sys::{signal, wait};
 use nix::sys::{stat, termios};
 use nix::unistd::{
-    close, dup, dup2_stderr, dup2_stdin, dup2_stdout, fork, setsid, ForkResult, Pid,
+    ForkResult, Pid, close, dup, dup2_stderr, dup2_stdin, dup2_stdout, fork, setsid,
 };
 use std;
 use std::fs::File;
@@ -68,7 +68,7 @@ use nix::pty::ptsname_r;
 /// instead of using a static mutex this calls ioctl with TIOCPTYGNAME directly
 /// based on https://blog.tarq.io/ptsname-on-osx-with-rust/
 fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
-    use nix::libc::{ioctl, TIOCPTYGNAME};
+    use nix::libc::{TIOCPTYGNAME, ioctl};
     use std::ffi::CStr;
 
     // the buffer size on OSX is 128, defined by sys/ttycom.h
@@ -207,7 +207,7 @@ impl PtyProcess {
                 Ok(_) => {}
                 // process was already killed before -> ignore
                 Err(nix::errno::Errno::ESRCH) => {
-                    return Ok(wait::WaitStatus::Exited(Pid::from_raw(0), 0))
+                    return Ok(wait::WaitStatus::Exited(Pid::from_raw(0), 0));
                 }
                 Err(e) => return Err(Error::from(e)),
             }
