@@ -104,9 +104,12 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
 ///  + `None`: `read_until` is blocking forever. This is probably not what you want
 ///  + `Some(millis)`: after millis milliseconds a timeout error is raised
 /// - `strip_ansi_escape_codes`: Whether to filter out escape codes, such as colors.
+///  + `Some`: the frequency with which the process will check the output.
+///  + `None`: will be 1/1000 of a `timeout` (or `100ms` if `timeout` is None)
 #[derive(Default)]
 pub struct Options {
     pub timeout: Option<time::Duration>,
+    pub poll_frequency: Option<time::Duration>,
     pub strip_ansi_escape_codes: bool,
 }
 
@@ -120,6 +123,7 @@ pub struct NBReader {
     buffer: String,
     eof: bool,
     timeout: Option<time::Duration>,
+    poll_frequency: time::Duration,
 }
 
 impl NBReader {
@@ -167,6 +171,15 @@ impl NBReader {
             // don't do error handling as on an error it was most probably
             // the main thread which exited (remote hangup)
         });
+
+        // Set `poll_frequency` based on the `timeout` (or 100ms in case `timeout` is None) if it is None
+        let poll_frequency = match options.poll_frequency {
+            Some(poll_frequency) => poll_frequency,
+            None => options
+                .timeout
+                .map_or(time::Duration::from_millis(100), |t| t / 1000),
+        };
+
         // allocate string with a initial capacity of 1024, so when appending chars
         // we don't need to reallocate memory often
         NBReader {
@@ -174,6 +187,7 @@ impl NBReader {
             buffer: String::with_capacity(1024),
             eof: false,
             timeout: options.timeout,
+            poll_frequency,
         }
     }
 
@@ -279,7 +293,7 @@ impl NBReader {
                 }
             }
             // nothing matched: wait a little
-            thread::sleep(time::Duration::from_millis(100));
+            thread::sleep(self.poll_frequency);
         }
     }
 
@@ -408,6 +422,7 @@ mod tests {
             Options {
                 timeout: None,
                 strip_ansi_escape_codes: true,
+                poll_frequency: None,
             },
         );
         let bytes = r
@@ -425,6 +440,7 @@ mod tests {
             Options {
                 timeout: None,
                 strip_ansi_escape_codes: true,
+                poll_frequency: None,
             },
         );
         let bytes = r

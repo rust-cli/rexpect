@@ -210,6 +210,9 @@ pub struct Builder {
     /// If Some: all `exp_*` commands time out after `timeout`, if None: never times out.
     /// By default timeout is set to 30s
     pub(super) timeout: Option<time::Duration>,
+    /// If Some: the frequency with which the process will check the output.
+    /// If None: will be 1/1000 of a `timeout` (or `100ms` if `timeout` is None)
+    pub(super) poll_frequency: Option<time::Duration>,
     /// Whether to filter out escape codes, such as colors.
     pub(super) strip_ansi_escape_codes: bool,
 }
@@ -241,6 +244,14 @@ impl Builder {
         self
     }
 
+    /// Set the poll frequency with which the process will check the output.
+    ///
+    /// Keep `None` to make it relative to the `timeout`.
+    pub fn poll_frequency(mut self, poll_frequency: Option<time::Duration>) -> Self {
+        self.poll_frequency = poll_frequency;
+        self
+    }
+
     ///  Set filtering out escape codes, such as colors.
     pub fn strip_ansi_escape_codes(mut self) -> Self {
         self.strip_ansi_escape_codes = true;
@@ -259,12 +270,14 @@ impl Builder {
 
         let Self {
             timeout,
+            poll_frequency,
             strip_ansi_escape_codes,
             ..
         } = self;
 
         let options = Options {
             timeout,
+            poll_frequency,
             strip_ansi_escape_codes,
         };
 
@@ -504,6 +517,7 @@ pub fn spawn_stream<R: Read + Send + 'static, W: Write>(
         Options {
             timeout,
             strip_ansi_escape_codes: false,
+            poll_frequency: None,
         },
     )
 }
