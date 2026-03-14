@@ -199,6 +199,76 @@ impl PtySession {
     }
 }
 
+/// Process factory, which can be used in order to configure the properties of a command.
+#[derive(Default)]
+pub struct Builder {
+    /// A command to spawn
+    pub(super) command: Option<Command>,
+    /// If Some: all `exp_*` commands time out after `timeout`, if None: never times out.
+    /// By default timeout is set to 30s
+    pub(super) timeout_ms: Option<u64>,
+    /// Whether to filter out escape codes, such as colors.
+    pub(super) strip_ansi_escape_codes: bool,
+}
+
+impl Builder {
+    pub fn new(command: Command) -> Self {
+        Self {
+            command: Some(command),
+            timeout_ms: Some(30),
+            ..Default::default()
+        }
+    }
+
+    /// Set the command which will be executed
+    pub fn command(mut self, command: Command) -> Self {
+        self.command = Some(command);
+        self
+    }
+
+    /// Set the timeout for the command.
+    ///
+    /// If Some: all `exp_*` commands time out after `timeout`, if None: never times out.
+    /// It's highly recommended to put a timeout there, as otherwise in case of
+    /// a problem the program just hangs instead of exiting with an
+    /// error message indicating where it stopped.
+    /// For automation 30s (the default in pexpect) is a good value.
+    pub fn timeout(mut self, timeout_ms: Option<u64>) -> Self {
+        self.timeout_ms = timeout_ms;
+        self
+    }
+
+    ///  Set filtering out escape codes, such as colors.
+    pub fn strip_ansi_escape_codes(mut self) -> Self {
+        self.strip_ansi_escape_codes = true;
+        self
+    }
+
+    pub fn spawn(self) -> Result<PtySession, Error> {
+        let command = self.command.ok_or(Error::EmptyProgramName)?;
+
+        #[cfg(feature = "which")]
+        {
+            let _ = which::which(command.get_program())?;
+        }
+        let mut process = PtyProcess::new(command)?;
+        process.set_kill_timeout(self.timeout_ms);
+
+        let Self {
+            timeout_ms,
+            strip_ansi_escape_codes,
+            ..
+        } = self;
+
+        let options = Options {
+            timeout_ms,
+            strip_ansi_escape_codes,
+        };
+
+        PtySession::new(process, options)
+    }
+}
+
 /// Turn e.g. "prog arg1 arg2" into ["prog", "arg1", "arg2"]
 /// Also takes care of single and double quotes
 fn tokenize_command(program: &str) -> Result<Vec<String>, Error> {
@@ -232,25 +302,10 @@ pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession, Error
 
 /// See `spawn`
 pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession, Error> {
-    spawn_with_options(
-        command,
-        Options {
-            timeout_ms,
-            strip_ansi_escape_codes: false,
-        },
-    )
-}
-
-/// See `spawn`
-pub fn spawn_with_options(command: Command, options: Options) -> Result<PtySession, Error> {
-    #[cfg(feature = "which")]
-    {
-        let _ = which::which(command.get_program())?;
-    }
-    let mut process = PtyProcess::new(command)?;
-    process.set_kill_timeout(options.timeout_ms);
-
-    PtySession::new(process, options)
+    let builder = Builder::new(command);
+    builder
+        .timeout(timeout_ms)
+        .spawn()
 }
 
 /// A repl session: e.g. bash or the python shell:
