@@ -1,19 +1,23 @@
 use rexpect::error::Error;
 use rexpect::process::wait;
 use rexpect::spawn;
+use std::time;
 
 /// The following code emits:
 /// cat exited with code 0, all good!
 /// cat exited with code 1
 /// Output (stdout and stderr): cat: /this/does/not/exist: No such file or directory
 fn main() -> Result<(), Error> {
-    let p = spawn("cat /etc/passwd", Some(2000))?;
+    let p = spawn("cat /etc/passwd", Some(time::Duration::from_secs(2)))?;
     match p.process.wait() {
         Ok(wait::WaitStatus::Exited(_, 0)) => println!("cat exited with code 0, all good!"),
         _ => println!("cat exited with code >0, or it was killed"),
     }
 
-    let mut p = spawn("cat /this/does/not/exist", Some(2000))?;
+    let mut p = spawn(
+        "cat /this/does/not/exist",
+        Some(time::Duration::from_secs(2)),
+    )?;
     match p.process.wait() {
         Ok(wait::WaitStatus::Exited(_, 0)) => println!("cat succeeded"),
         Ok(wait::WaitStatus::Exited(_, c)) => {

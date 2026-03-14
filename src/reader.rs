@@ -106,7 +106,7 @@ pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize
 /// - `strip_ansi_escape_codes`: Whether to filter out escape codes, such as colors.
 #[derive(Default)]
 pub struct Options {
-    pub timeout_ms: Option<u64>,
+    pub timeout: Option<time::Duration>,
     pub strip_ansi_escape_codes: bool,
 }
 
@@ -173,7 +173,7 @@ impl NBReader {
             reader: rx,
             buffer: String::with_capacity(1024),
             eof: false,
-            timeout: options.timeout_ms.map(time::Duration::from_millis),
+            timeout: options.timeout,
         }
     }
 
@@ -406,7 +406,7 @@ mod tests {
         let mut r = NBReader::new(
             f,
             Options {
-                timeout_ms: None,
+                timeout: None,
                 strip_ansi_escape_codes: true,
             },
         );
@@ -423,7 +423,7 @@ mod tests {
         let mut r = NBReader::new(
             f,
             Options {
-                timeout_ms: None,
+                timeout: None,
                 strip_ansi_escape_codes: true,
             },
         );

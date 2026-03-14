@@ -147,8 +147,8 @@ impl PtyProcess {
     /// At the drop of `PtyProcess` the running process is killed. This is blocking forever if
     /// the process does not react to a normal kill. If `kill_timeout` is set the process is
     /// `kill -9`ed after duration
-    pub fn set_kill_timeout(&mut self, timeout_ms: Option<u64>) {
-        self.kill_timeout = timeout_ms.map(time::Duration::from_millis);
+    pub fn set_kill_timeout(&mut self, timeout: Option<time::Duration>) {
+        self.kill_timeout = timeout;
     }
 
     /// Get status of child process, non-blocking.

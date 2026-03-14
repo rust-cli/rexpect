@@ -3,6 +3,7 @@
 use rexpect::error::Error;
 use rexpect::session::PtyReplSession;
 use rexpect::spawn;
+use std::time;
 
 fn ed_session() -> Result<PtyReplSession, Error> {
     let mut ed = PtyReplSession {
@@ -12,7 +13,7 @@ fn ed_session() -> Result<PtyReplSession, Error> {
 
         // used for `wait_for_prompt()`
         prompt: "> ".to_owned(),
-        pty_session: spawn("/bin/ed -p '> '", Some(2000))?,
+        pty_session: spawn("/bin/ed -p '> '", Some(time::Duration::from_secs(2)))?,
         // command which is sent when the instance of this struct is dropped
         // in the below example this is not needed, but if you don't explicitly
         // exit a REPL then rexpect tries to send a SIGTERM and depending on the repl
