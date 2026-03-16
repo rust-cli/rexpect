@@ -5,7 +5,6 @@ use nix;
 use nix::fcntl::{OFlag, open};
 use nix::libc::STDERR_FILENO;
 use nix::pty::{PtyMaster, grantpt, posix_openpt, unlockpt};
-pub use nix::sys::{signal, wait};
 use nix::sys::{stat, termios};
 use nix::unistd::{
     ForkResult, Pid, close, dup, dup2_stderr, dup2_stdin, dup2_stdout, fork, setsid,
@@ -17,6 +16,8 @@ use std::os::unix::io::AsRawFd;
 use std::os::unix::process::CommandExt;
 use std::process::Command;
 use std::{thread, time};
+
+pub use nix::sys::{signal, wait};
 
 /// Start a process in a forked tty to interact with it like you would
 /// within a terminal
