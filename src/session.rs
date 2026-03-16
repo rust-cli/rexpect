@@ -166,8 +166,8 @@ impl<W: Write> StreamSession<W> {
 /// Interact with a process with read/write/signals, etc.
 #[allow(dead_code)]
 pub struct PtySession {
-    pub process: PtyProcess,
-    pub stream: StreamSession<File>,
+    process: PtyProcess,
+    stream: StreamSession<File>,
 }
 
 // make StreamSession's methods available directly
