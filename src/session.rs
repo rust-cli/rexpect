@@ -12,8 +12,8 @@ use std::process::Command;
 use tempfile;
 
 pub struct StreamSession<W: Write> {
-    pub writer: LineWriter<W>,
-    pub reader: NBReader,
+    writer: LineWriter<W>,
+    reader: NBReader,
 }
 
 impl<W: Write> StreamSession<W> {
@@ -166,8 +166,8 @@ impl<W: Write> StreamSession<W> {
 /// Interact with a process with read/write/signals, etc.
 #[allow(dead_code)]
 pub struct PtySession {
-    pub process: PtyProcess,
-    pub stream: StreamSession<File>,
+    process: PtyProcess,
+    stream: StreamSession<File>,
 }
 
 // make StreamSession's methods available directly
@@ -273,10 +273,10 @@ pub fn spawn_with_options(command: Command, options: Options) -> Result<PtySessi
 /// You have a prompt where a user inputs commands and the shell
 /// executes it and writes some output
 pub struct PtyReplSession {
-    pub pty_session: PtySession,
-    pub prompt: String,
-    pub quit_command: Option<String>,
-    pub echo_on: bool,
+    pty_session: PtySession,
+    prompt: String,
+    quit_command: Option<String>,
+    echo_on: bool,
 }
 
 impl PtyReplSession {
@@ -484,17 +484,15 @@ pub fn spawn_stream<R: Read + Send + 'static, W: Write>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nix::sys::wait;
 
     #[test]
     fn test_read_line() -> Result<(), Error> {
         let mut s = spawn("cat", Some(100000))?;
         s.send_line("hans")?;
         assert_eq!("hans", s.read_line()?);
-        let should = crate::process::wait::WaitStatus::Signaled(
-            s.process.child_pid,
-            crate::process::signal::Signal::SIGTERM,
-            false,
-        );
+        let should =
+            wait::WaitStatus::Signaled(s.process.child_pid, crate::process::Signal::SIGTERM, false);
         assert_eq!(should, s.process.exit()?);
         Ok(())
     }

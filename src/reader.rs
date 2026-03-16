@@ -14,9 +14,9 @@ pub struct Options {
     /// `None`: `read_until` is blocking forever. This is probably not what you want
     ///
     /// `Some(millis)`: after millis milliseconds a timeout error is raised
-    pub timeout_ms: Option<u64>,
+    pub(crate) timeout_ms: Option<u64>,
     /// Whether to filter out escape codes, such as colors.
-    pub strip_ansi_escape_codes: bool,
+    pub(crate) strip_ansi_escape_codes: bool,
 }
 
 impl Options {
@@ -214,6 +214,7 @@ impl NBReader {
 /// See [`NBReader::read_until`]
 ///
 /// Note that when used with a tty the lines end with \r\n
+#[non_exhaustive]
 pub enum ReadUntil {
     /// Searches for string (use '\n'.`to_string()` to search for newline).
     ///
@@ -268,7 +269,7 @@ impl fmt::Display for ReadUntil {
 /// Tuple with match positions:
 /// 1. position before match (0 in case of EOF and Nbytes)
 /// 2. position after match
-pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize)> {
+fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize)> {
     match needle {
         ReadUntil::String(s) => buffer.find(s).map(|pos| (pos, pos + s.len())),
         ReadUntil::Regex(pattern) => pattern.find(buffer).map(|mat| (mat.start(), mat.end())),
