@@ -273,10 +273,10 @@ pub fn spawn_with_options(command: Command, options: Options) -> Result<PtySessi
 /// You have a prompt where a user inputs commands and the shell
 /// executes it and writes some output
 pub struct PtyReplSession {
-    pub pty_session: PtySession,
-    pub prompt: String,
-    pub quit_command: Option<String>,
-    pub echo_on: bool,
+    pty_session: PtySession,
+    prompt: String,
+    quit_command: Option<String>,
+    echo_on: bool,
 }
 
 impl PtyReplSession {
