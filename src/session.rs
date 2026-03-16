@@ -5,8 +5,8 @@ use crate::process::PtyProcess;
 use crate::reader::{NBReader, Regex};
 pub use crate::reader::{Options, ReadUntil};
 use std::fs::File;
-use std::io::LineWriter;
 use std::io::prelude::*;
+use std::io::LineWriter;
 use std::ops::{Deref, DerefMut};
 use std::process::Command;
 use tempfile;
@@ -88,11 +88,6 @@ impl<W: Write> StreamSession<W> {
         self.reader.try_read()
     }
 
-    // wrapper around reader::read_until to give more context for errors
-    fn exp(&mut self, needle: &ReadUntil) -> Result<(String, String), Error> {
-        self.reader.read_until(needle)
-    }
-
     /// Wait until we see EOF (i.e. child process has terminated)
     /// Return all the yet unread output
     pub fn exp_eof(&mut self) -> Result<String, Error> {
@@ -148,6 +143,11 @@ impl<W: Write> StreamSession<W> {
     /// ```
     pub fn exp_any(&mut self, needles: Vec<ReadUntil>) -> Result<(String, String), Error> {
         self.exp(&ReadUntil::Any(needles))
+    }
+
+    // wrapper around reader::read_until to give more context for errors
+    fn exp(&mut self, needle: &ReadUntil) -> Result<(String, String), Error> {
+        self.reader.read_until(needle)
     }
 }
 /// Interact with a process with read/write/signals, etc.
