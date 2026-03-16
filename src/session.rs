@@ -184,26 +184,26 @@ impl DerefMut for PtySession {
     }
 }
 
-/// Start a process in a tty session, write and read from it
-///
-/// # Example
-///
-/// ```
-///
-/// use rexpect::spawn;
-/// # use rexpect::error::Error;
-///
-/// # fn main() {
-///     # || -> Result<(), Error> {
-/// let mut s = spawn("cat", Some(1000))?;
-/// s.send_line("hello, polly!")?;
-/// let line = s.read_line()?;
-/// assert_eq!("hello, polly!", line);
-///         # Ok(())
-///     # }().expect("test failed");
-/// # }
-/// ```
 impl PtySession {
+    /// Start a process in a tty session, write and read from it
+    ///
+    /// # Example
+    ///
+    /// ```
+    ///
+    /// use rexpect::spawn;
+    /// # use rexpect::error::Error;
+    ///
+    /// # fn main() {
+    ///     # || -> Result<(), Error> {
+    /// let mut s = spawn("cat", Some(1000))?;
+    /// s.send_line("hello, polly!")?;
+    /// let line = s.read_line()?;
+    /// assert_eq!("hello, polly!", line);
+    ///         # Ok(())
+    ///     # }().expect("test failed");
+    /// # }
+    /// ```
     fn new(process: PtyProcess, options: Options) -> Result<Self, Error> {
         let f = process.get_file_handle()?;
         let reader = f.try_clone()?;
