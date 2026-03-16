@@ -212,12 +212,6 @@ impl PtySession {
     }
 }
 
-/// Turn e.g. "prog arg1 arg2" into ["prog", "arg1", "arg2"]
-/// Also takes care of single and double quotes
-fn tokenize_command(program: &str) -> Result<Vec<String>, Error> {
-    comma::parse_command(program).ok_or(Error::BadProgramArguments)
-}
-
 /// Start command in background in a pty session (pty fork) and return a struct
 /// with writer and buffered reader (for unblocking reads).
 ///
@@ -241,6 +235,12 @@ pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession, Error
     let mut command = Command::new(prog);
     command.args(parts);
     spawn_command(command, timeout_ms)
+}
+
+/// Turn e.g. "prog arg1 arg2" into ["prog", "arg1", "arg2"]
+/// Also takes care of single and double quotes
+fn tokenize_command(program: &str) -> Result<Vec<String>, Error> {
+    comma::parse_command(program).ok_or(Error::BadProgramArguments)
 }
 
 /// See [`spawn`]
