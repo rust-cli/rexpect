@@ -12,8 +12,8 @@ use std::process::Command;
 use tempfile;
 
 pub struct StreamSession<W: Write> {
-    pub writer: LineWriter<W>,
-    pub reader: NBReader,
+    writer: LineWriter<W>,
+    reader: NBReader,
 }
 
 impl<W: Write> StreamSession<W> {
