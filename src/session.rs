@@ -245,13 +245,7 @@ fn tokenize_command(program: &str) -> Result<Vec<String>, Error> {
 
 /// See [`spawn`]
 pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession, Error> {
-    spawn_with_options(
-        command,
-        Options {
-            timeout_ms,
-            strip_ansi_escape_codes: false,
-        },
-    )
+    spawn_with_options(command, Options::new().timeout_ms(timeout_ms))
 }
 
 /// See [`spawn`]
@@ -456,14 +450,7 @@ pub fn spawn_stream<R: Read + Send + 'static, W: Write>(
     writer: W,
     timeout_ms: Option<u64>,
 ) -> StreamSession<W> {
-    StreamSession::new(
-        reader,
-        writer,
-        Options {
-            timeout_ms,
-            strip_ansi_escape_codes: false,
-        },
-    )
+    StreamSession::new(reader, writer, Options::new().timeout_ms(timeout_ms))
 }
 
 #[cfg(test)]
