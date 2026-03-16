@@ -204,7 +204,7 @@ impl PtySession {
     ///     # }().expect("test failed");
     /// # }
     /// ```
-    fn new(process: PtyProcess, options: Options) -> Result<Self, Error> {
+    pub fn new(process: PtyProcess, options: Options) -> Result<Self, Error> {
         let f = process.get_file_handle()?;
         let reader = f.try_clone()?;
         let stream = StreamSession::new(reader, f, options);
