@@ -268,7 +268,7 @@ impl fmt::Display for ReadUntil {
 /// Tuple with match positions:
 /// 1. position before match (0 in case of EOF and Nbytes)
 /// 2. position after match
-pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize)> {
+fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize)> {
     match needle {
         ReadUntil::String(s) => buffer.find(s).map(|pos| (pos, pos + s.len())),
         ReadUntil::Regex(pattern) => pattern.find(buffer).map(|mat| (mat.start(), mat.end())),
