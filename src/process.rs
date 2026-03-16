@@ -57,8 +57,8 @@ pub use wait::WaitStatus;
 /// # }
 /// ```
 pub struct PtyProcess {
-    pub pty: PtyMaster,
-    pub child_pid: Pid,
+    pty: PtyMaster,
+    pub(crate) child_pid: Pid,
     kill_timeout: Option<time::Duration>,
 }
 
