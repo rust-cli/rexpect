@@ -18,7 +18,7 @@ use std::os::unix::process::CommandExt;
 use std::process::Command;
 use std::{thread, time};
 
-/// Start a process in a forked tty so you can interact with it the same as you would
+/// Start a process in a forked tty to interact with it like you would
 /// within a terminal
 ///
 /// The process and pty session are killed upon dropping `PtyProcess`
@@ -144,17 +144,18 @@ impl PtyProcess {
         Ok(fd.into())
     }
 
-    /// At the drop of `PtyProcess` the running process is killed. This is blocking forever if
-    /// the process does not react to a normal kill. If `kill_timeout` is set the process is
-    /// `kill -9`ed after duration
+    /// At the drop of `PtyProcess` the running process is killed (blocking).
+    ///
+    /// This is blocking forever if the process does not react to a normal kill.
+    /// If `kill_timeout` is set the process is `kill -9`ed after duration.
     pub fn set_kill_timeout(&mut self, timeout_ms: Option<u64>) {
         self.kill_timeout = timeout_ms.map(time::Duration::from_millis);
     }
 
-    /// Get status of child process, non-blocking.
+    /// Get status of child process (non-blocking).
     ///
-    /// This method runs waitpid on the process.
-    /// This means: If you ran `exit()` before or `status()` this method will
+    /// This method runs waitpid on the process:
+    /// if you ran `exit()` before or `status()` this method will
     /// return `None`
     ///
     /// # Example
@@ -176,29 +177,34 @@ impl PtyProcess {
         wait::waitpid(self.child_pid, Some(wait::WaitPidFlag::WNOHANG)).ok()
     }
 
-    /// Wait until process has exited. This is a blocking call.
+    /// Wait until process has exited (non-blocking).
+    ///
     /// If the process doesn't terminate this will block forever.
     pub fn wait(&self) -> Result<wait::WaitStatus, Error> {
         wait::waitpid(self.child_pid, None).map_err(Error::from)
     }
 
-    /// Regularly exit the process, this method is blocking until the process is dead
+    /// Regularly exit the process (blocking).
+    ///
+    /// This method is blocking until the process is dead
     pub fn exit(&mut self) -> Result<wait::WaitStatus, Error> {
         self.kill(signal::SIGTERM)
     }
 
-    /// Non-blocking variant of `kill()` (doesn't wait for process to be killed)
+    /// Kill the process with a specific signal (non-blocking).
     pub fn signal(&mut self, sig: signal::Signal) -> Result<(), Error> {
         signal::kill(self.child_pid, sig).map_err(Error::from)
     }
 
-    /// Kill the process with a specific signal. This method blocks, until the process is dead
+    /// Kill the process with a specific signal (blocking).
     ///
-    /// repeatedly sends SIGTERM to the process until it died,
+    /// This method blocks until the process is dead
+    ///
+    /// This repeatedly sends SIGTERM to the process until it died,
     /// the pty session is closed upon dropping `PtyMaster`,
     /// so we don't need to explicitly do that here.
     ///
-    /// if `kill_timeout` is set and a repeated sending of signal does not result in the process
+    /// If `kill_timeout` is set and a repeated sending of signal does not result in the process
     /// being killed, then `kill -9` is sent after the `kill_timeout` duration has elapsed.
     pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus, Error> {
         let start = time::Instant::now();

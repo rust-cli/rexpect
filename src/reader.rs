@@ -8,105 +8,14 @@ use std::sync::mpsc::{Receiver, channel};
 use std::thread;
 use std::{fmt, time};
 
-#[derive(Debug)]
-enum PipeError {
-    IO(io::Error),
-}
-
-#[derive(Debug)]
-#[allow(clippy::upper_case_acronyms)]
-enum PipedChar {
-    Char(u8),
-    EOF,
-}
-
-pub enum ReadUntil {
-    String(String),
-    Regex(Regex),
-    EOF,
-    NBytes(usize),
-    Any(Vec<ReadUntil>),
-}
-
-impl fmt::Display for ReadUntil {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let printable = match self {
-            ReadUntil::String(s) if s == "\n" => "\\n (newline)".to_owned(),
-            ReadUntil::String(s) if s == "\r" => "\\r (carriage return)".to_owned(),
-            ReadUntil::String(s) => format!("\"{s}\""),
-            ReadUntil::Regex(r) => format!("Regex: \"{r}\""),
-            ReadUntil::EOF => "EOF (End of File)".to_owned(),
-            ReadUntil::NBytes(n) => format!("reading {n} bytes"),
-            ReadUntil::Any(v) => {
-                let mut res = Vec::new();
-                for r in v {
-                    res.push(r.to_string());
-                }
-                res.join(", ")
-            }
-        };
-        write!(f, "{printable}")
-    }
-}
-
-/// find first occurrence of needle within buffer
-///
-/// # Arguments:
-///
-/// - buffer: the currently read buffer from a process which will still grow in the future
-/// - eof: if the process already sent an EOF or a HUP
-///
-/// # Return
-///
-/// Tuple with match positions:
-/// 1. position before match (0 in case of EOF and Nbytes)
-/// 2. position after match
-pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize)> {
-    match needle {
-        ReadUntil::String(s) => buffer.find(s).map(|pos| (pos, pos + s.len())),
-        ReadUntil::Regex(pattern) => pattern.find(buffer).map(|mat| (mat.start(), mat.end())),
-        ReadUntil::EOF => {
-            if eof {
-                Some((0, buffer.len()))
-            } else {
-                None
-            }
-        }
-        ReadUntil::NBytes(n) => {
-            if *n <= buffer.len() {
-                Some((0, *n))
-            } else if eof && !buffer.is_empty() {
-                // reached almost end of buffer, return string, even though it will be
-                // smaller than the wished n bytes
-                Some((0, buffer.len()))
-            } else {
-                None
-            }
-        }
-        ReadUntil::Any(anys) => anys
-            .iter()
-            // Filter matching needles
-            .filter_map(|any| find(any, buffer, eof))
-            // Return the left-most match
-            .min_by(|(start1, end1), (start2, end2)| {
-                if start1 == start2 {
-                    end1.cmp(end2)
-                } else {
-                    start1.cmp(start2)
-                }
-            }),
-    }
-}
-
-/// Options for `NBReader`
-///
-/// - timeout:
-///  + `None`: `read_until` is blocking forever. This is probably not what you want
-///  + `Some(millis)`: after millis milliseconds a timeout error is raised
-/// - `strip_ansi_escape_codes`: Whether to filter out escape codes, such as colors.
+/// Options for [`NBReader`]
 #[derive(Default)]
 pub struct Options {
+    /// `None`: `read_until` is blocking forever. This is probably not what you want
+    ///
+    /// `Some(millis)`: after millis milliseconds a timeout error is raised
     pub timeout_ms: Option<u64>,
+    /// Whether to filter out escape codes, such as colors.
     pub strip_ansi_escape_codes: bool,
 }
 
@@ -125,10 +34,10 @@ pub struct NBReader {
 impl NBReader {
     /// Create a new reader instance
     ///
-    /// # Arguments:
+    /// # Arguments
     ///
-    /// - f: file like object
-    /// - options: see `Options`
+    /// - `f`: file like object
+    /// - `options`: see [`Options`]
     pub fn new<R: Read + Send + 'static>(f: R, options: Options) -> NBReader {
         let (tx, rx) = channel();
 
@@ -177,7 +86,7 @@ impl NBReader {
         }
     }
 
-    /// reads all available chars from the read channel and stores them in self.buffer
+    /// Reads all available chars from the read channel and stores them in [`Self::buffer`]
     fn read_into_buffer(&mut self) -> Result<(), Error> {
         if self.eof {
             return Ok(());
@@ -199,24 +108,13 @@ impl NBReader {
         Ok(())
     }
 
-    /// Read until needle is found (blocking!) and return tuple with:
-    /// 1. yet unread string until and without needle
-    /// 2. matched needle
+    /// Read until needle is found (blocking!)
     ///
     /// This methods loops (while reading from the Cursor) until the needle is found.
     ///
-    /// There are different modes:
-    ///
-    /// - `ReadUntil::String` searches for string (use '\n'.`to_string()` to search for newline).
-    ///   Returns not yet read data in first String, and needle in second String
-    /// - `ReadUntil::Regex` searches for regex
-    ///   Returns not yet read data in first String and matched regex in second String
-    /// - `ReadUntil::NBytes` reads maximum n bytes
-    ///   Returns n bytes in second String, first String is left empty
-    /// - `ReadUntil::EOF` reads until end of file is reached
-    ///   Returns all bytes in second String, first is left empty
-    ///
-    /// Note that when used with a tty the lines end with \r\n
+    /// Returns a tuple with:
+    /// 1. yet unread string until and without needle
+    /// 2. matched needle
     ///
     /// Returns error if EOF is reached before the needle could be found.
     ///
@@ -283,8 +181,9 @@ impl NBReader {
         }
     }
 
-    /// Try to read one char from internal buffer. Returns None if
-    /// no char is ready, Some(char) otherwise. This is non-blocking
+    /// Try to read one char from internal buffer (non-blocking).
+    ///
+    /// Returns `None` if no char is ready `Some(char)` otherwise.
     pub fn try_read(&mut self) -> Option<char> {
         // discard eventual errors, EOF will be handled in read_until correctly
         let _ = self.read_into_buffer();
@@ -294,6 +193,112 @@ impl NBReader {
             None
         }
     }
+}
+
+/// See [`NBReader::read_until`]
+///
+/// Note that when used with a tty the lines end with \r\n
+pub enum ReadUntil {
+    /// Searches for string (use '\n'.`to_string()` to search for newline).
+    ///
+    /// Returns not yet read data in first String, and needle in second String
+    String(String),
+    /// `ReadUntil::Regex` searches for regex
+    ///
+    /// Returns not yet read data in first String and matched regex in second String
+    Regex(Regex),
+    /// `ReadUntil::NBytes` reads maximum n bytes
+    ///
+    /// Returns n bytes in second String, first String is left empty
+    NBytes(usize),
+    /// `ReadUntil::EOF` reads until end of file is reached
+    ///
+    /// Returns all bytes in second String, first is left empty
+    EOF,
+    Any(Vec<ReadUntil>),
+}
+
+impl fmt::Display for ReadUntil {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ReadUntil::String(s) if s == "\n" => write!(f, "\\n (newline)"),
+            ReadUntil::String(s) if s == "\r" => write!(f, "\\r (carriage return)"),
+            ReadUntil::String(s) => write!(f, "\"{s}\""),
+            ReadUntil::Regex(r) => write!(f, "Regex: \"{r}\""),
+            ReadUntil::NBytes(n) => write!(f, "reading {n} bytes"),
+            ReadUntil::EOF => write!(f, "EOF (End of File)"),
+            ReadUntil::Any(v) => {
+                for (i, r) in v.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{r}")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Find first occurrence of needle within buffer
+///
+/// # Arguments:
+///
+/// - `buffer`: the currently read buffer from a process which will still grow in the future
+/// - `eof`: if the process already sent an EOF or a HUP
+///
+/// # Return
+///
+/// Tuple with match positions:
+/// 1. position before match (0 in case of EOF and Nbytes)
+/// 2. position after match
+pub fn find(needle: &ReadUntil, buffer: &str, eof: bool) -> Option<(usize, usize)> {
+    match needle {
+        ReadUntil::String(s) => buffer.find(s).map(|pos| (pos, pos + s.len())),
+        ReadUntil::Regex(pattern) => pattern.find(buffer).map(|mat| (mat.start(), mat.end())),
+        ReadUntil::EOF => {
+            if eof {
+                Some((0, buffer.len()))
+            } else {
+                None
+            }
+        }
+        ReadUntil::NBytes(n) => {
+            if *n <= buffer.len() {
+                Some((0, *n))
+            } else if eof && !buffer.is_empty() {
+                // reached almost end of buffer, return string, even though it will be
+                // smaller than the wished n bytes
+                Some((0, buffer.len()))
+            } else {
+                None
+            }
+        }
+        ReadUntil::Any(anys) => anys
+            .iter()
+            // Filter matching needles
+            .filter_map(|any| find(any, buffer, eof))
+            // Return the left-most match
+            .min_by(|(start1, end1), (start2, end2)| {
+                if start1 == start2 {
+                    end1.cmp(end2)
+                } else {
+                    start1.cmp(start2)
+                }
+            }),
+    }
+}
+
+#[derive(Debug)]
+enum PipeError {
+    IO(io::Error),
+}
+
+#[derive(Debug)]
+#[allow(clippy::upper_case_acronyms)]
+enum PipedChar {
+    Char(u8),
+    EOF,
 }
 
 #[cfg(test)]
