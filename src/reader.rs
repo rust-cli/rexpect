@@ -14,9 +14,9 @@ pub struct Options {
     /// `None`: `read_until` is blocking forever. This is probably not what you want
     ///
     /// `Some(millis)`: after millis milliseconds a timeout error is raised
-    pub timeout_ms: Option<u64>,
+    pub(crate) timeout_ms: Option<u64>,
     /// Whether to filter out escape codes, such as colors.
-    pub strip_ansi_escape_codes: bool,
+    pub(crate) strip_ansi_escape_codes: bool,
 }
 
 impl Options {
