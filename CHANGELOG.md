@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Breaking Changes
+
+- Made fields private: `PtyReplSession`, `PtySession`, `StreamSession`, `Options`
+- Made `non_exhaustive`: `Options`, `Error`
+- Remove from the API: `find`, `process::wait`, `process::signal`
+
 ## [0.6.4] - 2026-03-16
 
 ### Feature
