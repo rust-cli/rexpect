@@ -206,6 +206,7 @@ impl NBReader {
     }
 }
 
+/// See [`NBReader::read_until`]
 pub enum ReadUntil {
     String(String),
     Regex(Regex),
