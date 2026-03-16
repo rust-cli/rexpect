@@ -8,15 +8,14 @@ use std::sync::mpsc::{Receiver, channel};
 use std::thread;
 use std::{fmt, time};
 
-/// Options for `NBReader`
-///
-/// - timeout:
-///  + `None`: `read_until` is blocking forever. This is probably not what you want
-///  + `Some(millis)`: after millis milliseconds a timeout error is raised
-/// - `strip_ansi_escape_codes`: Whether to filter out escape codes, such as colors.
+/// Options for [`NBReader`]
 #[derive(Default)]
 pub struct Options {
+    /// `None`: `read_until` is blocking forever. This is probably not what you want
+    ///
+    /// `Some(millis)`: after millis milliseconds a timeout error is raised
     pub timeout_ms: Option<u64>,
+    /// Whether to filter out escape codes, such as colors.
     pub strip_ansi_escape_codes: bool,
 }
 
@@ -35,10 +34,10 @@ pub struct NBReader {
 impl NBReader {
     /// Create a new reader instance
     ///
-    /// # Arguments:
+    /// # Arguments
     ///
-    /// - f: file like object
-    /// - options: see `Options`
+    /// - `f`: file like object
+    /// - `options`: see [`Options`]
     pub fn new<R: Read + Send + 'static>(f: R, options: Options) -> NBReader {
         let (tx, rx) = channel();
 
@@ -87,7 +86,7 @@ impl NBReader {
         }
     }
 
-    /// reads all available chars from the read channel and stores them in self.buffer
+    /// Reads all available chars from the read channel and stores them in [`Self::buffer`]
     fn read_into_buffer(&mut self) -> Result<(), Error> {
         if self.eof {
             return Ok(());
@@ -109,24 +108,13 @@ impl NBReader {
         Ok(())
     }
 
-    /// Read until needle is found (blocking!) and return tuple with:
-    /// 1. yet unread string until and without needle
-    /// 2. matched needle
+    /// Read until needle is found (blocking!)
     ///
     /// This methods loops (while reading from the Cursor) until the needle is found.
     ///
-    /// There are different modes:
-    ///
-    /// - `ReadUntil::String` searches for string (use '\n'.`to_string()` to search for newline).
-    ///   Returns not yet read data in first String, and needle in second String
-    /// - `ReadUntil::Regex` searches for regex
-    ///   Returns not yet read data in first String and matched regex in second String
-    /// - `ReadUntil::NBytes` reads maximum n bytes
-    ///   Returns n bytes in second String, first String is left empty
-    /// - `ReadUntil::EOF` reads until end of file is reached
-    ///   Returns all bytes in second String, first is left empty
-    ///
-    /// Note that when used with a tty the lines end with \r\n
+    /// Returns a tuple with:
+    /// 1. yet unread string until and without needle
+    /// 2. matched needle
     ///
     /// Returns error if EOF is reached before the needle could be found.
     ///
@@ -193,8 +181,9 @@ impl NBReader {
         }
     }
 
-    /// Try to read one char from internal buffer. Returns None if
-    /// no char is ready, Some(char) otherwise. This is non-blocking
+    /// Try to read one char from internal buffer (non-blocking).
+    ///
+    /// Returns `None` if no char is ready `Some(char)` otherwise.
     pub fn try_read(&mut self) -> Option<char> {
         // discard eventual errors, EOF will be handled in read_until correctly
         let _ = self.read_into_buffer();
@@ -207,10 +196,24 @@ impl NBReader {
 }
 
 /// See [`NBReader::read_until`]
+///
+/// Note that when used with a tty the lines end with \r\n
 pub enum ReadUntil {
+    /// Searches for string (use '\n'.`to_string()` to search for newline).
+    ///
+    /// Returns not yet read data in first String, and needle in second String
     String(String),
+    /// `ReadUntil::Regex` searches for regex
+    ///
+    /// Returns not yet read data in first String and matched regex in second String
     Regex(Regex),
+    /// `ReadUntil::NBytes` reads maximum n bytes
+    ///
+    /// Returns n bytes in second String, first String is left empty
     NBytes(usize),
+    /// `ReadUntil::EOF` reads until end of file is reached
+    ///
+    /// Returns all bytes in second String, first is left empty
     EOF,
     Any(Vec<ReadUntil>),
 }
@@ -237,12 +240,12 @@ impl fmt::Display for ReadUntil {
     }
 }
 
-/// find first occurrence of needle within buffer
+/// Find first occurrence of needle within buffer
 ///
 /// # Arguments:
 ///
-/// - buffer: the currently read buffer from a process which will still grow in the future
-/// - eof: if the process already sent an EOF or a HUP
+/// - `buffer`: the currently read buffer from a process which will still grow in the future
+/// - `eof`: if the process already sent an EOF or a HUP
 ///
 /// # Return
 ///

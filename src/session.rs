@@ -24,9 +24,9 @@ impl<W: Write> StreamSession<W> {
         }
     }
 
-    /// sends string and a newline to process
+    /// Sends string and a newline to process
     ///
-    /// this is guaranteed to be flushed to the process
+    /// This is guaranteed to be flushed to the process
     /// returns number of written bytes
     pub fn send_line(&mut self, line: &str) -> Result<usize, Error> {
         let mut len = self.send(line)?;
@@ -34,8 +34,10 @@ impl<W: Write> StreamSession<W> {
         Ok(len)
     }
 
-    /// Send string to process. As stdin of the process is most likely buffered, you'd
-    /// need to call `flush()` after `send()` to make the process actually see your input.
+    /// Send string to process.
+    ///
+    /// As stdin of the process is most likely buffered,
+    /// you'd need to call `flush()` after `send()` to make the process actually see your input.
     ///
     /// Returns number of written bytes
     pub fn send(&mut self, s: &str) -> Result<usize, Error> {
@@ -45,7 +47,9 @@ impl<W: Write> StreamSession<W> {
     /// Send a control code to the running process and consume resulting output line
     /// (which is empty because echo is off)
     ///
-    /// E.g. `send_control('c')` sends ctrl-c. Upper/smaller case does not matter.
+    /// Upper/smaller case does not matter.
+    ///
+    /// E.g. `send_control('c')` sends ctrl-c.
     pub fn send_control(&mut self, c: char) -> Result<(), Error> {
         let code = match c {
             'a'..='z' => c as u8 + 1 - b'a',
@@ -63,13 +67,16 @@ impl<W: Write> StreamSession<W> {
         Ok(())
     }
 
-    /// Make sure all bytes written via `send()` are sent to the process
+    /// Make sure all bytes written via [`Self::send()`] are sent to the process
     pub fn flush(&mut self) -> Result<(), Error> {
         self.writer.flush().map_err(Error::from)
     }
 
-    /// Read one line (blocking!) and return line without the newline
-    /// (waits until \n is in the output fetches the line and removes \r at the end if present)
+    /// Read one line (blocking).
+    ///
+    /// Return line without the newline
+    ///
+    /// Waits until \n is in the output fetches the line and removes \r at the end if present.
     pub fn read_line(&mut self) -> Result<String, Error> {
         match self.exp(&ReadUntil::String('\n'.to_string())) {
             Ok((mut line, _)) => {
@@ -82,19 +89,22 @@ impl<W: Write> StreamSession<W> {
         }
     }
 
-    /// Return `Some(c)` if a char is ready in the stdout stream of the process, return `None`
-    /// otherwise. This is non-blocking.
+    /// Return `Some(c)` if a char is ready in the stdout stream of the process (non-blocking).
+    ///
+    /// Return `None` otherwise.
     pub fn try_read(&mut self) -> Option<char> {
         self.reader.try_read()
     }
 
     /// Wait until we see EOF (i.e. child process has terminated)
+    ///
     /// Return all the yet unread output
     pub fn exp_eof(&mut self) -> Result<String, Error> {
         self.exp(&ReadUntil::EOF).map(|(_, s)| s)
     }
 
     /// Wait until provided regex is seen on stdout of child process.
+    ///
     /// Return a tuple:
     /// 1. the yet unread output
     /// 2. the matched regex
@@ -106,6 +116,7 @@ impl<W: Write> StreamSession<W> {
     }
 
     /// Wait until provided string is seen on stdout of child process.
+    ///
     /// Return the yet unread output (without the matched string)
     pub fn exp_string(&mut self, needle: &str) -> Result<String, Error> {
         self.exp(&ReadUntil::String(needle.to_owned()))
@@ -113,6 +124,7 @@ impl<W: Write> StreamSession<W> {
     }
 
     /// Wait until provided char is seen on stdout of child process.
+    ///
     /// Return the yet unread output (without the matched char)
     pub fn exp_char(&mut self, needle: char) -> Result<String, Error> {
         self.exp(&ReadUntil::String(needle.to_string()))
@@ -150,6 +162,7 @@ impl<W: Write> StreamSession<W> {
         self.reader.read_until(needle)
     }
 }
+
 /// Interact with a process with read/write/signals, etc.
 #[allow(dead_code)]
 pub struct PtySession {
@@ -230,7 +243,7 @@ pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession, Error
     spawn_command(command, timeout_ms)
 }
 
-/// See `spawn`
+/// See [`spawn`]
 pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession, Error> {
     spawn_with_options(
         command,
@@ -241,7 +254,7 @@ pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySes
     )
 }
 
-/// See `spawn`
+/// See [`spawn`]
 pub fn spawn_with_options(command: Command, options: Options) -> Result<PtySession, Error> {
     #[cfg(feature = "which")]
     {
@@ -253,26 +266,29 @@ pub fn spawn_with_options(command: Command, options: Options) -> Result<PtySessi
     PtySession::new(process, options)
 }
 
-/// A repl session: e.g. bash or the python shell:
+/// A repl session: e.g. bash or the python shell.
+///
 /// You have a prompt where a user inputs commands and the shell
 /// executes it and writes some output
 pub struct PtyReplSession {
-    /// the prompt, used for `wait_for_prompt`, e.g. ">>> " for python
+    /// The prompt, used for `wait_for_prompt`, e.g. ">>> " for python
     pub prompt: String,
 
-    /// the `pty_session` you prepared before (initiating the shell, maybe set a custom prompt, etc.)
-    /// see `spawn_bash` for an example
+    /// The `pty_session` you prepared before (initiating the shell, maybe set a custom prompt, etc.)
+    ///
+    /// See [`spawn_bash`] for an example
     pub pty_session: PtySession,
 
-    /// if set, then the `quit_command` is called when this object is dropped
+    /// If set, then the `quit_command` is called when this object is dropped
     /// you need to provide this if the shell you're testing is not killed by just sending
     /// SIGTERM
     pub quit_command: Option<String>,
 
-    /// set this to true if the repl has echo on (i.e. sends user input to stdout)
-    /// although echo is set off at pty fork (see `PtyProcess::new`) a few repls still
-    /// seem to be able to send output. You may need to try with true first, and if
-    /// tests fail set this to false.
+    /// Set this to true if the repl has echo on (i.e. sends user input to stdout)
+    ///
+    /// Although echo is set off at pty fork (see `PtyProcess::new`) a few repls still
+    /// seem to be able to send output.
+    /// You may need to try with true first, and if tests fail set this to false.
     pub echo_on: bool,
 }
 
@@ -319,9 +335,11 @@ impl PtyReplSession {
         Ok(())
     }
 
-    /// send line to repl (and flush output) and then, if `echo_on=true` wait for the
-    /// input to appear.
-    /// Return: number of bytes written
+    /// Send line to repl (and flush output)
+    ///
+    /// If `echo_on=true` wait for the input to appear.
+    ///
+    /// Returns number of bytes written
     pub fn send_line(&mut self, line: &str) -> Result<usize, Error> {
         let bytes_written = self.pty_session.send_line(line)?;
         if self.echo_on {
@@ -360,25 +378,25 @@ impl Drop for PtyReplSession {
 
 /// Spawn bash in a pty session, run programs and expect output
 ///
+/// The difference to [`spawn`] and [`spawn_command`] is:
 ///
-/// The difference to `spawn` and `spawn_command` is:
-///
-/// - `spawn_bash` starts bash with a custom rcfile which guarantees
+/// - [`spawn_bash`] starts bash with a custom rcfile which guarantees
 ///   a certain prompt
-/// - the `PtyBashSession` also provides `wait_for_prompt` and `execute`
+/// - Provides [`PtyReplSession::wait_for_prompt`] and [`PtyReplSession::execute`]
 ///
-/// timeout: the duration until which `exp_*` returns a timeout error, or None
-/// additionally, when dropping the bash prompt while bash is still blocked by a program
+/// `timeout`: the duration until which `exp_*` returns a timeout error, or `None`.
+/// Additionally, when dropping the bash prompt while bash is still blocked by a program
 /// (e.g. `sleep 9999`) then the timeout is used as a timeout before a `kill -9` is issued
-/// at the bash command. Use a timeout whenever possible because it makes
-/// debugging a lot easier (otherwise the program just hangs and you
-/// don't know where)
+/// at the bash command.
+/// Use a timeout whenever possible because it makes debugging a lot easier
+/// (otherwise the program just hangs and you don't know where)
 ///
-/// bash is started with echo off. That means you don't need to "read back"
-/// what you wrote to bash. But what you need to do is a `wait_for_prompt`
-/// after a process finished.
+/// Bash is started with echo off.
+/// That means you don't need to "read back" what you wrote to bash.
+/// But what you need to do is a `wait_for_prompt` after a process finished.
 ///
-/// Also: if you start a program you should use `execute` and not `send_line`.
+/// Also: if you start a program you should use [`PtyReplSession::execute`] and not
+/// [`PtyReplSession::send_line`].
 ///
 /// For an example see the README
 pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession, Error> {
