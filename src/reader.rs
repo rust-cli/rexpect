@@ -217,22 +217,23 @@ pub enum ReadUntil {
 
 impl fmt::Display for ReadUntil {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let printable = match self {
-            ReadUntil::String(s) if s == "\n" => "\\n (newline)".to_owned(),
-            ReadUntil::String(s) if s == "\r" => "\\r (carriage return)".to_owned(),
-            ReadUntil::String(s) => format!("\"{s}\""),
-            ReadUntil::Regex(r) => format!("Regex: \"{r}\""),
-            ReadUntil::NBytes(n) => format!("reading {n} bytes"),
-            ReadUntil::EOF => "EOF (End of File)".to_owned(),
+        match self {
+            ReadUntil::String(s) if s == "\n" => write!(f, "\\n (newline)"),
+            ReadUntil::String(s) if s == "\r" => write!(f, "\\r (carriage return)"),
+            ReadUntil::String(s) => write!(f, "\"{s}\""),
+            ReadUntil::Regex(r) => write!(f, "Regex: \"{r}\""),
+            ReadUntil::NBytes(n) => write!(f, "reading {n} bytes"),
+            ReadUntil::EOF => write!(f, "EOF (End of File)"),
             ReadUntil::Any(v) => {
-                let mut res = Vec::new();
-                for r in v {
-                    res.push(r.to_string());
+                for (i, r) in v.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{r}")?;
                 }
-                res.join(", ")
+                Ok(())
             }
-        };
-        write!(f, "{printable}")
+        }
     }
 }
 
