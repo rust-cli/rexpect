@@ -210,6 +210,14 @@ impl PtySession {
         let stream = StreamSession::new(reader, f, options);
         Ok(Self { process, stream })
     }
+
+    pub fn process(&self) -> &PtyProcess {
+        &self.process
+    }
+
+    pub fn process_mut(&mut self) -> &mut PtyProcess {
+        &mut self.process
+    }
 }
 
 /// Start command in background in a pty session (pty fork) and return a struct
@@ -245,13 +253,7 @@ fn tokenize_command(program: &str) -> Result<Vec<String>, Error> {
 
 /// See [`spawn`]
 pub fn spawn_command(command: Command, timeout_ms: Option<u64>) -> Result<PtySession, Error> {
-    spawn_with_options(
-        command,
-        Options {
-            timeout_ms,
-            strip_ansi_escape_codes: false,
-        },
-    )
+    spawn_with_options(command, Options::new().timeout_ms(timeout_ms))
 }
 
 /// See [`spawn`]
@@ -271,25 +273,45 @@ pub fn spawn_with_options(command: Command, options: Options) -> Result<PtySessi
 /// You have a prompt where a user inputs commands and the shell
 /// executes it and writes some output
 pub struct PtyReplSession {
-    /// The prompt, used for `wait_for_prompt`, e.g. ">>> " for python
+    pub pty_session: PtySession,
     pub prompt: String,
+    pub quit_command: Option<String>,
+    pub echo_on: bool,
+}
 
-    /// The `pty_session` you prepared before (initiating the shell, maybe set a custom prompt, etc.)
+impl PtyReplSession {
+    /// Start a REPL session
+    ///
+    /// `prompt`: used for [`Self::wait_for_prompt`], e.g. ">>> " for python
     ///
     /// See [`spawn_bash`] for an example
-    pub pty_session: PtySession,
+    pub fn new(pty_session: PtySession, prompt: String) -> Self {
+        Self {
+            pty_session,
+            prompt,
+            quit_command: None,
+            echo_on: false,
+        }
+    }
 
-    /// If set, then the `quit_command` is called when this object is dropped
-    /// you need to provide this if the shell you're testing is not killed by just sending
-    /// SIGTERM
-    pub quit_command: Option<String>,
+    /// Called when this object is dropped.
+    ///
+    /// You need to provide this if the shell you're testing is not killed by just sending
+    /// SIGTERM.
+    pub fn quit_command(mut self, cmd: Option<String>) -> Self {
+        self.quit_command = cmd;
+        self
+    }
 
     /// Set this to true if the repl has echo on (i.e. sends user input to stdout)
     ///
     /// Although echo is set off at pty fork (see `PtyProcess::new`) a few repls still
     /// seem to be able to send output.
     /// You may need to try with true first, and if tests fail set this to false.
-    pub echo_on: bool,
+    pub fn echo_on(mut self, yes: bool) -> Self {
+        self.echo_on = yes;
+        self
+    }
 }
 
 impl PtyReplSession {
@@ -423,8 +445,8 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession, Error> {
     spawn_command(c, timeout).and_then(|p| {
         let new_prompt = "[REXPECT_PROMPT>";
         let mut pb = PtyReplSession {
-            prompt: new_prompt.to_owned(),
             pty_session: p,
+            prompt: new_prompt.to_owned(),
             quit_command: Some("quit".to_owned()),
             echo_on: false,
         };
@@ -456,14 +478,7 @@ pub fn spawn_stream<R: Read + Send + 'static, W: Write>(
     writer: W,
     timeout_ms: Option<u64>,
 ) -> StreamSession<W> {
-    StreamSession::new(
-        reader,
-        writer,
-        Options {
-            timeout_ms,
-            strip_ansi_escape_codes: false,
-        },
-    )
+    StreamSession::new(reader, writer, Options::new().timeout_ms(timeout_ms))
 }
 
 #[cfg(test)]

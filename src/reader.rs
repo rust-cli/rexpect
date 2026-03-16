@@ -19,6 +19,22 @@ pub struct Options {
     pub strip_ansi_escape_codes: bool,
 }
 
+impl Options {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn timeout_ms(mut self, timeout_ms: Option<u64>) -> Self {
+        self.timeout_ms = timeout_ms;
+        self
+    }
+
+    pub fn strip_ansi_escape_codes(mut self, yes: bool) -> Self {
+        self.strip_ansi_escape_codes = yes;
+        self
+    }
+}
+
 /// Non blocking reader
 ///
 /// Typically you'd need that to check for output of a process without blocking your thread.
@@ -408,13 +424,7 @@ mod tests {
     #[test]
     fn test_skip_partial_ansi_code() {
         let f = io::Cursor::new("\x1b[31;1;4mHello\x1b[1");
-        let mut r = NBReader::new(
-            f,
-            Options {
-                timeout_ms: None,
-                strip_ansi_escape_codes: true,
-            },
-        );
+        let mut r = NBReader::new(f, Options::new().strip_ansi_escape_codes(true));
         let bytes = r
             .read_until(&ReadUntil::String("Hello".to_owned()))
             .unwrap();
@@ -425,13 +435,7 @@ mod tests {
     #[test]
     fn test_skip_ansi_codes() {
         let f = io::Cursor::new("\x1b[31;1;4mHello\x1b[0m");
-        let mut r = NBReader::new(
-            f,
-            Options {
-                timeout_ms: None,
-                strip_ansi_escape_codes: true,
-            },
-        );
+        let mut r = NBReader::new(f, Options::new().strip_ansi_escape_codes(true));
         let bytes = r
             .read_until(&ReadUntil::String("Hello".to_owned()))
             .unwrap();
