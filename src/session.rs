@@ -184,38 +184,32 @@ impl DerefMut for PtySession {
     }
 }
 
-/// Start a process in a tty session, write and read from it
-///
-/// # Example
-///
-/// ```
-///
-/// use rexpect::spawn;
-/// # use rexpect::error::Error;
-///
-/// # fn main() {
-///     # || -> Result<(), Error> {
-/// let mut s = spawn("cat", Some(1000))?;
-/// s.send_line("hello, polly!")?;
-/// let line = s.read_line()?;
-/// assert_eq!("hello, polly!", line);
-///         # Ok(())
-///     # }().expect("test failed");
-/// # }
-/// ```
 impl PtySession {
-    fn new(process: PtyProcess, options: Options) -> Result<Self, Error> {
+    /// Start a process in a tty session, write and read from it
+    ///
+    /// # Example
+    ///
+    /// ```
+    ///
+    /// use rexpect::spawn;
+    /// # use rexpect::error::Error;
+    ///
+    /// # fn main() {
+    ///     # || -> Result<(), Error> {
+    /// let mut s = spawn("cat", Some(1000))?;
+    /// s.send_line("hello, polly!")?;
+    /// let line = s.read_line()?;
+    /// assert_eq!("hello, polly!", line);
+    ///         # Ok(())
+    ///     # }().expect("test failed");
+    /// # }
+    /// ```
+    pub fn new(process: PtyProcess, options: Options) -> Result<Self, Error> {
         let f = process.get_file_handle()?;
         let reader = f.try_clone()?;
         let stream = StreamSession::new(reader, f, options);
         Ok(Self { process, stream })
     }
-}
-
-/// Turn e.g. "prog arg1 arg2" into ["prog", "arg1", "arg2"]
-/// Also takes care of single and double quotes
-fn tokenize_command(program: &str) -> Result<Vec<String>, Error> {
-    comma::parse_command(program).ok_or(Error::BadProgramArguments)
 }
 
 /// Start command in background in a pty session (pty fork) and return a struct
@@ -241,6 +235,12 @@ pub fn spawn(program: &str, timeout_ms: Option<u64>) -> Result<PtySession, Error
     let mut command = Command::new(prog);
     command.args(parts);
     spawn_command(command, timeout_ms)
+}
+
+/// Turn e.g. "prog arg1 arg2" into ["prog", "arg1", "arg2"]
+/// Also takes care of single and double quotes
+fn tokenize_command(program: &str) -> Result<Vec<String>, Error> {
+    comma::parse_command(program).ok_or(Error::BadProgramArguments)
 }
 
 /// See [`spawn`]
