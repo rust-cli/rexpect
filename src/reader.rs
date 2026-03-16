@@ -210,8 +210,8 @@ impl NBReader {
 pub enum ReadUntil {
     String(String),
     Regex(Regex),
-    EOF,
     NBytes(usize),
+    EOF,
     Any(Vec<ReadUntil>),
 }
 
@@ -222,8 +222,8 @@ impl fmt::Display for ReadUntil {
             ReadUntil::String(s) if s == "\r" => "\\r (carriage return)".to_owned(),
             ReadUntil::String(s) => format!("\"{s}\""),
             ReadUntil::Regex(r) => format!("Regex: \"{r}\""),
-            ReadUntil::EOF => "EOF (End of File)".to_owned(),
             ReadUntil::NBytes(n) => format!("reading {n} bytes"),
+            ReadUntil::EOF => "EOF (End of File)".to_owned(),
             ReadUntil::Any(v) => {
                 let mut res = Vec::new();
                 for r in v {
