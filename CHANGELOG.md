@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Feature
+
+- Add builder methods to `Options`
+- Add `PtySession::new`
+- Add `PtySession::process`
+- Add `PtyReplSession::new`, `PtyReplSession::echo_on`, `PtyReplSession::quit_command`
+
+### Fixes
+
+- Make `process::wait::WaitStatus` and `process::signal::Signal` available directly in `process`
+
+### Compatibility
+
+- MSRV is 1.85
+
 ## [0.6.3] - 2026-01-15
 
 ### Fixes
