@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+## [0.7.0] - 2026-03-16
+
 ### Breaking Changes
 
 - Made fields private: `PtyReplSession`, `PtySession`, `StreamSession`, `Options`
@@ -138,7 +140,8 @@ All `exp_*` methods now also return the yet unread string and/or the matched str
 - try_read was blocking when there was no char ready (!) -> fixed
 
 <!-- next-url -->
-[Unreleased]: https://github.com/rust-cli/rexpect/compare/v0.6.4...HEAD
+[Unreleased]: https://github.com/rust-cli/rexpect/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/rust-cli/rexpect/compare/v0.6.4...v0.7.0
 [0.6.4]: https://github.com/rust-cli/rexpect/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/rust-cli/rexpect/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/rust-cli/rexpect/compare/v0.6.1...v0.6.2
