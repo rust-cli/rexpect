@@ -8,13 +8,13 @@ use rexpect::spawn;
 /// Output (stdout and stderr): cat: /this/does/not/exist: No such file or directory
 fn main() -> Result<(), Error> {
     let p = spawn("cat /etc/passwd", Some(2000))?;
-    match p.process.wait() {
+    match p.process().wait() {
         Ok(WaitStatus::Exited(_, 0)) => println!("cat exited with code 0, all good!"),
         _ => println!("cat exited with code >0, or it was killed"),
     }
 
     let mut p = spawn("cat /this/does/not/exist", Some(2000))?;
-    match p.process.wait() {
+    match p.process().wait() {
         Ok(WaitStatus::Exited(_, 0)) => println!("cat succeeded"),
         Ok(WaitStatus::Exited(_, c)) => {
             println!("Cat failed with exit code {c}");

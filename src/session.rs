@@ -210,6 +210,14 @@ impl PtySession {
         let stream = StreamSession::new(reader, f, options);
         Ok(Self { process, stream })
     }
+
+    pub fn process(&self) -> &PtyProcess {
+        &self.process
+    }
+
+    pub fn process_mut(&mut self) -> &mut PtyProcess {
+        &mut self.process
+    }
 }
 
 /// Start command in background in a pty session (pty fork) and return a struct
