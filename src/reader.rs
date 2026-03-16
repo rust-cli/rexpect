@@ -214,6 +214,7 @@ impl NBReader {
 /// See [`NBReader::read_until`]
 ///
 /// Note that when used with a tty the lines end with \r\n
+#[non_exhaustive]
 pub enum ReadUntil {
     /// Searches for string (use '\n'.`to_string()` to search for newline).
     ///
