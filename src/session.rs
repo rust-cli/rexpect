@@ -273,13 +273,13 @@ pub fn spawn_with_options(command: Command, options: Options) -> Result<PtySessi
 /// You have a prompt where a user inputs commands and the shell
 /// executes it and writes some output
 pub struct PtyReplSession {
-    /// The prompt, used for `wait_for_prompt`, e.g. ">>> " for python
-    pub prompt: String,
-
     /// The `pty_session` you prepared before (initiating the shell, maybe set a custom prompt, etc.)
     ///
     /// See [`spawn_bash`] for an example
     pub pty_session: PtySession,
+
+    /// The prompt, used for `wait_for_prompt`, e.g. ">>> " for python
+    pub prompt: String,
 
     /// If set, then the `quit_command` is called when this object is dropped
     /// you need to provide this if the shell you're testing is not killed by just sending
@@ -425,8 +425,8 @@ pub fn spawn_bash(timeout: Option<u64>) -> Result<PtyReplSession, Error> {
     spawn_command(c, timeout).and_then(|p| {
         let new_prompt = "[REXPECT_PROMPT>";
         let mut pb = PtyReplSession {
-            prompt: new_prompt.to_owned(),
             pty_session: p,
+            prompt: new_prompt.to_owned(),
             quit_command: Some("quit".to_owned()),
             echo_on: false,
         };
