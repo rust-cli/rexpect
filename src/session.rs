@@ -484,17 +484,15 @@ pub fn spawn_stream<R: Read + Send + 'static, W: Write>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nix::sys::wait;
 
     #[test]
     fn test_read_line() -> Result<(), Error> {
         let mut s = spawn("cat", Some(100000))?;
         s.send_line("hans")?;
         assert_eq!("hans", s.read_line()?);
-        let should = crate::process::wait::WaitStatus::Signaled(
-            s.process.child_pid,
-            crate::process::signal::Signal::SIGTERM,
-            false,
-        );
+        let should =
+            wait::WaitStatus::Signaled(s.process.child_pid, crate::process::Signal::SIGTERM, false);
         assert_eq!(should, s.process.exit()?);
         Ok(())
     }
