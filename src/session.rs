@@ -273,25 +273,45 @@ pub fn spawn_with_options(command: Command, options: Options) -> Result<PtySessi
 /// You have a prompt where a user inputs commands and the shell
 /// executes it and writes some output
 pub struct PtyReplSession {
-    /// The `pty_session` you prepared before (initiating the shell, maybe set a custom prompt, etc.)
+    pub pty_session: PtySession,
+    pub prompt: String,
+    pub quit_command: Option<String>,
+    pub echo_on: bool,
+}
+
+impl PtyReplSession {
+    /// Start a REPL session
+    ///
+    /// `prompt`: used for [`Self::wait_for_prompt`], e.g. ">>> " for python
     ///
     /// See [`spawn_bash`] for an example
-    pub pty_session: PtySession,
+    pub fn new(pty_session: PtySession, prompt: String) -> Self {
+        Self {
+            pty_session,
+            prompt,
+            quit_command: None,
+            echo_on: false,
+        }
+    }
 
-    /// The prompt, used for `wait_for_prompt`, e.g. ">>> " for python
-    pub prompt: String,
-
-    /// If set, then the `quit_command` is called when this object is dropped
-    /// you need to provide this if the shell you're testing is not killed by just sending
-    /// SIGTERM
-    pub quit_command: Option<String>,
+    /// Called when this object is dropped.
+    ///
+    /// You need to provide this if the shell you're testing is not killed by just sending
+    /// SIGTERM.
+    pub fn quit_command(mut self, cmd: Option<String>) -> Self {
+        self.quit_command = cmd;
+        self
+    }
 
     /// Set this to true if the repl has echo on (i.e. sends user input to stdout)
     ///
     /// Although echo is set off at pty fork (see `PtyProcess::new`) a few repls still
     /// seem to be able to send output.
     /// You may need to try with true first, and if tests fail set this to false.
-    pub echo_on: bool,
+    pub fn echo_on(mut self, yes: bool) -> Self {
+        self.echo_on = yes;
+        self
+    }
 }
 
 impl PtyReplSession {
