@@ -457,4 +457,16 @@ mod tests {
         assert_eq!(None, r.try_read());
         assert_eq!(None, r.try_read());
     }
+
+    #[test]
+    #[should_panic(expected = "is_char_boundary")]
+    fn test_try_read_multibyte() {
+        // Reproduces the char-boundary panic when the buffer holds a
+        // multi-byte UTF-8 char. Filling `buffer` directly keeps the
+        // test fully synchronous.
+        let f = io::Cursor::new("");
+        let mut r = NBReader::new(f, Options::default());
+        r.buffer.push_str("\u{c3}\u{83}");
+        let _ = r.try_read();
+    }
 }
