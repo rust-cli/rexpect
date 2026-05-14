@@ -203,11 +203,9 @@ impl NBReader {
     pub fn try_read(&mut self) -> Option<char> {
         // discard eventual errors, EOF will be handled in read_until correctly
         let _ = self.read_into_buffer();
-        if !self.buffer.is_empty() {
-            self.buffer.drain(..1).last()
-        } else {
-            None
-        }
+        let first = self.buffer.chars().next()?;
+        self.buffer.drain(..first.len_utf8());
+        Some(first)
     }
 }
 
@@ -455,6 +453,17 @@ mod tests {
         assert_eq!(None, r.try_read());
         assert_eq!(None, r.try_read());
         assert_eq!(None, r.try_read());
+        assert_eq!(None, r.try_read());
+    }
+
+    #[test]
+    fn test_try_read_multibyte() {
+        // Filling `buffer` directly keeps the test fully synchronous.
+        let f = io::Cursor::new("");
+        let mut r = NBReader::new(f, Options::default());
+        r.buffer.push_str("\u{c3}\u{83}");
+        assert_eq!(Some('\u{c3}'), r.try_read());
+        assert_eq!(Some('\u{83}'), r.try_read());
         assert_eq!(None, r.try_read());
     }
 }
