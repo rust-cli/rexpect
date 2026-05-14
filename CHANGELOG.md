@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Fixes
+
+- Avoid `char` boundary panics with `NBReader::try_read`
+
 ## [0.7.0] - 2026-03-16
 
 ### Breaking Changes
