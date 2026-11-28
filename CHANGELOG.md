@@ -8,6 +8,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+## [0.7.2] - 2026-11-26
+
+### Internal
+
+- Update dependencies
+
+## [0.7.1] - 2026-05-14
+
+### Fixes
+
+- Avoid `char` boundary panics with `NBReader::try_read`
+
+## [0.7.0] - 2026-03-16
+
+### Breaking Changes
+
+- Made fields private: `PtyReplSession`, `PtySession`, `StreamSession`, `Options`
+- Made `non_exhaustive`: `Options`, `Error`
+- Remove from the API: `find`, `process::wait`, `process::signal`
+
+## [0.6.4] - 2026-03-16
+
+### Feature
+
+- Add builder methods to `Options`
+- Add `PtySession::new`
+- Add `PtySession::process`
+- Add `PtyReplSession::new`, `PtyReplSession::echo_on`, `PtyReplSession::quit_command`
+
+### Fixes
+
+- Make `process::wait::WaitStatus` and `process::signal::Signal` available directly in `process`
+
+### Compatibility
+
+- MSRV is 1.85
+
 ## [0.6.3] - 2026-01-15
 
 ### Fixes
@@ -115,7 +152,11 @@ All `exp_*` methods now also return the yet unread string and/or the matched str
 - try_read was blocking when there was no char ready (!) -> fixed
 
 <!-- next-url -->
-[Unreleased]: https://github.com/rust-cli/rexpect/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/rust-cli/rexpect/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/rust-cli/rexpect/compare/v0.7.1...v0.7.2
+[0.7.1]: https://github.com/rust-cli/rexpect/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/rust-cli/rexpect/compare/v0.6.4...v0.7.0
+[0.6.4]: https://github.com/rust-cli/rexpect/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/rust-cli/rexpect/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/rust-cli/rexpect/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/rust-cli/rexpect/compare/v0.6.0...v0.6.1

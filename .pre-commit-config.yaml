@@ -10,10 +10,14 @@ repos:
     - id: check-case-conflict
     - id: detect-private-key
   - repo: https://github.com/crate-ci/typos
-    rev: v1.42.1
+    rev: v1.50.0
     hooks:
     - id: typos
   - repo: https://github.com/crate-ci/committed
-    rev: v1.1.10
+    rev: v1.1.11
     hooks:
     - id: committed
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.28.0
+    hooks:
+    - id: zizmor

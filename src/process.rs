@@ -2,13 +2,13 @@
 
 use crate::error::Error;
 use nix;
-use nix::fcntl::{open, OFlag};
+use nix::fcntl::{OFlag, open};
 use nix::libc::STDERR_FILENO;
-use nix::pty::{grantpt, posix_openpt, unlockpt, PtyMaster};
-pub use nix::sys::{signal, wait};
+use nix::pty::{PtyMaster, grantpt, posix_openpt, unlockpt};
+use nix::sys::{signal, wait};
 use nix::sys::{stat, termios};
 use nix::unistd::{
-    close, dup, dup2_stderr, dup2_stdin, dup2_stdout, fork, setsid, ForkResult, Pid,
+    ForkResult, Pid, close, dup, dup2_stderr, dup2_stdin, dup2_stdout, fork, setsid,
 };
 use std;
 use std::fs::File;
@@ -18,7 +18,10 @@ use std::os::unix::process::CommandExt;
 use std::process::Command;
 use std::{thread, time};
 
-/// Start a process in a forked tty so you can interact with it the same as you would
+pub use signal::Signal;
+pub use wait::WaitStatus;
+
+/// Start a process in a forked tty to interact with it like you would
 /// within a terminal
 ///
 /// The process and pty session are killed upon dropping `PtyProcess`
@@ -42,8 +45,7 @@ use std::{thread, time};
 /// # fn main() {
 ///
 /// let mut process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
-/// let fd = dup(&process.pty).unwrap();
-/// let f = File::from(fd);
+/// let f = process.get_file_handle().unwrap();
 /// let mut writer = LineWriter::new(&f);
 /// let mut reader = BufReader::new(&f);
 /// process.exit().expect("could not terminate process");
@@ -55,8 +57,8 @@ use std::{thread, time};
 /// # }
 /// ```
 pub struct PtyProcess {
-    pub pty: PtyMaster,
-    pub child_pid: Pid,
+    pty: PtyMaster,
+    pub(crate) child_pid: Pid,
     kill_timeout: Option<time::Duration>,
 }
 
@@ -68,7 +70,7 @@ use nix::pty::ptsname_r;
 /// instead of using a static mutex this calls ioctl with TIOCPTYGNAME directly
 /// based on https://blog.tarq.io/ptsname-on-osx-with-rust/
 fn ptsname_r(fd: &PtyMaster) -> nix::Result<String> {
-    use nix::libc::{ioctl, TIOCPTYGNAME};
+    use nix::libc::{TIOCPTYGNAME, ioctl};
     use std::ffi::CStr;
 
     // the buffer size on OSX is 128, defined by sys/ttycom.h
@@ -144,23 +146,24 @@ impl PtyProcess {
         Ok(fd.into())
     }
 
-    /// At the drop of `PtyProcess` the running process is killed. This is blocking forever if
-    /// the process does not react to a normal kill. If `kill_timeout` is set the process is
-    /// `kill -9`ed after duration
+    /// At the drop of `PtyProcess` the running process is killed (blocking).
+    ///
+    /// This is blocking forever if the process does not react to a normal kill.
+    /// If `kill_timeout` is set the process is `kill -9`ed after duration.
     pub fn set_kill_timeout(&mut self, timeout_ms: Option<u64>) {
         self.kill_timeout = timeout_ms.map(time::Duration::from_millis);
     }
 
-    /// Get status of child process, non-blocking.
+    /// Get status of child process (non-blocking).
     ///
-    /// This method runs waitpid on the process.
-    /// This means: If you ran `exit()` before or `status()` this method will
+    /// This method runs waitpid on the process:
+    /// if you ran `exit()` before or `status()` this method will
     /// return `None`
     ///
     /// # Example
     /// ```rust,no_run
     ///
-    /// use rexpect::process::{self, wait::WaitStatus};
+    /// use rexpect::process::{self, WaitStatus};
     /// use std::process::Command;
     ///
     /// # fn main() {
@@ -172,54 +175,59 @@ impl PtyProcess {
     /// # }
     /// ```
     ///
-    pub fn status(&self) -> Option<wait::WaitStatus> {
+    pub fn status(&self) -> Option<WaitStatus> {
         wait::waitpid(self.child_pid, Some(wait::WaitPidFlag::WNOHANG)).ok()
     }
 
-    /// Wait until process has exited. This is a blocking call.
+    /// Wait until process has exited (non-blocking).
+    ///
     /// If the process doesn't terminate this will block forever.
-    pub fn wait(&self) -> Result<wait::WaitStatus, Error> {
+    pub fn wait(&self) -> Result<WaitStatus, Error> {
         wait::waitpid(self.child_pid, None).map_err(Error::from)
     }
 
-    /// Regularly exit the process, this method is blocking until the process is dead
-    pub fn exit(&mut self) -> Result<wait::WaitStatus, Error> {
+    /// Regularly exit the process (blocking).
+    ///
+    /// This method is blocking until the process is dead
+    pub fn exit(&mut self) -> Result<WaitStatus, Error> {
         self.kill(signal::SIGTERM)
     }
 
-    /// Non-blocking variant of `kill()` (doesn't wait for process to be killed)
-    pub fn signal(&mut self, sig: signal::Signal) -> Result<(), Error> {
+    /// Kill the process with a specific signal (non-blocking).
+    pub fn signal(&mut self, sig: Signal) -> Result<(), Error> {
         signal::kill(self.child_pid, sig).map_err(Error::from)
     }
 
-    /// Kill the process with a specific signal. This method blocks, until the process is dead
+    /// Kill the process with a specific signal (blocking).
     ///
-    /// repeatedly sends SIGTERM to the process until it died,
+    /// This method blocks until the process is dead
+    ///
+    /// This repeatedly sends SIGTERM to the process until it died,
     /// the pty session is closed upon dropping `PtyMaster`,
     /// so we don't need to explicitly do that here.
     ///
-    /// if `kill_timeout` is set and a repeated sending of signal does not result in the process
+    /// If `kill_timeout` is set and a repeated sending of signal does not result in the process
     /// being killed, then `kill -9` is sent after the `kill_timeout` duration has elapsed.
-    pub fn kill(&mut self, sig: signal::Signal) -> Result<wait::WaitStatus, Error> {
+    pub fn kill(&mut self, sig: Signal) -> Result<WaitStatus, Error> {
         let start = time::Instant::now();
         loop {
             match signal::kill(self.child_pid, sig) {
                 Ok(_) => {}
                 // process was already killed before -> ignore
                 Err(nix::errno::Errno::ESRCH) => {
-                    return Ok(wait::WaitStatus::Exited(Pid::from_raw(0), 0))
+                    return Ok(WaitStatus::Exited(Pid::from_raw(0), 0));
                 }
                 Err(e) => return Err(Error::from(e)),
             }
 
             match self.status() {
-                Some(status) if status != wait::WaitStatus::StillAlive => return Ok(status),
+                Some(status) if status != WaitStatus::StillAlive => return Ok(status),
                 Some(_) | None => thread::sleep(time::Duration::from_millis(100)),
             }
             // kill -9 if timeout is reached
             if let Some(timeout) = self.kill_timeout {
                 if start.elapsed() > timeout {
-                    signal::kill(self.child_pid, signal::Signal::SIGKILL).map_err(Error::from)?;
+                    signal::kill(self.child_pid, Signal::SIGKILL).map_err(Error::from)?;
                 }
             }
         }
@@ -228,7 +236,7 @@ impl PtyProcess {
 
 impl Drop for PtyProcess {
     fn drop(&mut self) {
-        if let Some(wait::WaitStatus::StillAlive) = self.status() {
+        if let Some(WaitStatus::StillAlive) = self.status() {
             self.exit().expect("cannot exit");
         }
     }
@@ -237,7 +245,7 @@ impl Drop for PtyProcess {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nix::sys::{signal, wait};
+    use nix::sys::wait;
     use std::io::{BufRead, BufReader, LineWriter, Write};
 
     #[test]
@@ -257,7 +265,7 @@ mod tests {
         thread::sleep(time::Duration::from_millis(100));
         writer.write_all(&[3])?; // send ^C
         writer.flush()?;
-        let should = wait::WaitStatus::Signaled(process.child_pid, signal::Signal::SIGINT, false);
+        let should = WaitStatus::Signaled(process.child_pid, Signal::SIGINT, false);
         assert_eq!(should, wait::waitpid(process.child_pid, None).unwrap());
         Ok(())
     }

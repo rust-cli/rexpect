@@ -1,6 +1,6 @@
 # rexpect
 
-[![Documentation](https://img.shields.io/badge/docs-master-blue.svg)][Documentation]
+[![Documentation](https://img.shields.io/badge/docs-main-blue.svg)][Documentation]
 ![License](https://img.shields.io/crates/l/rexpect.svg)
 [![Crates Status](https://img.shields.io/crates/v/rexpect.svg)][Crates.io]
 
@@ -19,7 +19,7 @@ The goal is to offer a similar set of functionality as
 
 ## Examples
 
-[For more examples, check the examples directory.](https://github.com/philippkeller/rexpect/tree/master/examples)
+[For more examples, check the examples directory.](https://github.com/rust-cli/rexpect/tree/main/examples)
 
 ### Basic usage
 
